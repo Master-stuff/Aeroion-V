@@ -1,0 +1,1905 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AeroIon-V — Fusée EHD Multi-Étages & Système de Stabilisation Active (THT 28 kV)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Three.js r128 & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #04070f;
+            font-family: 'Inter', sans-serif;
+            color: #f1f5f9;
+        }
+        .font-mono-tech {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .glass-panel {
+            background: rgba(8, 13, 25, 0.86);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            box-shadow: 0 14px 36px -4px rgba(0, 0, 0, 0.8), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+        }
+        /* Range Sliders */
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(30, 41, 59, 0.95);
+            border-radius: 999px;
+            outline: none;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #38bdf8;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.9);
+            border: 2px solid #ffffff;
+            transition: transform 0.15s ease, background-color 0.15s ease;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.18);
+            background: #7dd3fc;
+        }
+        .slider-emerald::-webkit-slider-thumb {
+            background: #10b981 !important;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.9) !important;
+        }
+        .slider-purple::-webkit-slider-thumb {
+            background: #a855f7 !important;
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.9) !important;
+        }
+        .slider-amber::-webkit-slider-thumb {
+            background: #f59e0b !important;
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.9) !important;
+        }
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.4);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(100, 116, 139, 0.5);
+            border-radius: 999px;
+        }
+        .label-3d {
+            position: absolute;
+            pointer-events: auto;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            z-index: 15;
+        }
+        .label-3d:hover {
+            transform: translate(-50%, -50%) scale(1.08);
+            z-index: 25;
+        }
+        @keyframes pulseAlert {
+            0%, 100% { border-color: rgba(245, 158, 11, 0.8); background-color: rgba(245, 158, 11, 0.18); }
+            50% { border-color: rgba(252, 211, 77, 1); background-color: rgba(245, 158, 11, 0.38); }
+        }
+        .perturbation-banner {
+            animation: pulseAlert 0.5s infinite;
+        }
+    </style>
+</head>
+<body class="relative w-screen h-screen overflow-hidden select-none">
+
+    <!-- 3D WEBGL CANVAS CONTAINER -->
+    <div id="canvas-container" class="absolute inset-0 w-full h-full z-0"></div>
+
+    <!-- 3D FLOATING ANNOTATIONS -->
+    <div id="labels-container" class="absolute inset-0 pointer-events-none z-10 overflow-hidden"></div>
+
+    <!-- LIVE PERTURBATION ALERT BANNER -->
+    <div id="perturbation-banner" class="hidden absolute top-20 left-1/2 -translate-x-1/2 z-40 px-5 py-2 rounded-xl border-2 perturbation-banner backdrop-blur-md flex items-center gap-3 shadow-2xl pointer-events-none">
+        <i class="fas fa-satellite-dish text-amber-300 text-lg animate-ping"></i>
+        <div>
+            <div id="perturbation-title" class="text-xs font-extrabold uppercase tracking-wider text-white">PERTURBATION EXTERNE DÉTECTÉE — CORRECTION PID + 3 SECTEURS EN COURS</div>
+            <div id="perturbation-sub" class="text-[11px] text-amber-100">Le capteur HC-SR04 et l'ESP32 compensent l'écart via le THT 28 kV DC.</div>
+        </div>
+    </div>
+
+    <!-- TOP NAVIGATION BAR -->
+    <header class="absolute top-3 left-3 right-3 z-30 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        <!-- Brand & System Title -->
+        <div class="glass-panel px-4 py-2 rounded-xl flex items-center gap-3 pointer-events-auto">
+            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500 via-indigo-600 to-purple-700 flex items-center justify-center shadow-lg shadow-sky-500/25 border border-sky-300/30">
+                <i class="fas fa-rocket text-white text-lg"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="font-extrabold text-sm md:text-base tracking-tight bg-gradient-to-r from-sky-300 via-cyan-200 to-purple-300 bg-clip-text text-transparent">AEROION-V • STABILISATION ROCKET</span>
+                    <span class="text-[10px] font-mono-tech uppercase px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/40 font-bold">GROS THT TV 28 kV DC</span>
+                </div>
+                <p class="text-[11px] text-slate-400 hidden lg:block">Fusée EHD Bi-Étage (3,20 g), Asservissement PID Ultrasonique HC-SR04 & Guidage Vectoriel 3 Secteurs sans Ailerons</p>
+            </div>
+        </div>
+
+        <!-- Quick Jury Test Perturbation Buttons -->
+        <div class="glass-panel p-1.5 rounded-xl flex flex-wrap items-center gap-1.5 pointer-events-auto">
+            <span class="text-[10px] uppercase tracking-wider text-slate-400 font-bold px-2 hidden xl:inline">
+                <i class="fas fa-vial text-sky-400 mr-1"></i>Tests du Jury :
+            </span>
+            <button onclick="triggerPushPerturbation()" class="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/35 text-amber-200 border border-amber-400/50 transition shadow">
+                <i class="fas fa-hand-point-down text-amber-400"></i>
+                <span>Pousser avec Baguette (-10 cm)</span>
+            </button>
+            <button onclick="triggerTiltPerturbation()" class="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-purple-500/20 hover:bg-purple-500/35 text-purple-200 border border-purple-400/50 transition shadow">
+                <i class="fas fa-wind text-purple-400"></i>
+                <span>Rafale Latérale (+12° Tilt)</span>
+            </button>
+            <button id="btn-auto-demo" onclick="toggleAutoDemo()" class="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-200 border border-emerald-400/50 transition">
+                <i class="fas fa-play"></i>
+                <span>Démo Automatique</span>
+            </button>
+        </div>
+
+        <!-- Camera View Presets -->
+        <div class="glass-panel px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 pointer-events-auto">
+            <button onclick="setCamView('overview')" class="px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-sky-300 border border-slate-600/50 text-xs font-semibold transition" title="Vue d'ensemble">
+                <i class="fas fa-expand mr-1"></i>Ensemble
+            </button>
+            <button onclick="setCamView('rocket')" class="px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-purple-300 border border-slate-600/50 text-xs font-semibold transition" title="Zoom Fusée 2 Étages & 3 Secteurs">
+                <i class="fas fa-rocket mr-1"></i>Fusée 3-Secteurs
+            </button>
+            <button onclick="setCamView('sensor')" class="px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-cyan-300 border border-slate-600/50 text-xs font-semibold transition" title="Zoom Capteur Ultrason HC-SR04">
+                <i class="fas fa-wave-square mr-1"></i>Sonar HC-SR04
+            </button>
+            <button onclick="setCamView('tht')" class="px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-amber-300 border border-slate-600/50 text-xs font-semibold transition" title="Zoom Gros THT TV Couleur 28 kV">
+                <i class="fas fa-bolt mr-1"></i>Gros THT 28 kV
+            </button>
+        </div>
+    </header>
+
+    <!-- LEFT PANEL: CLOSED-LOOP PID ALTITUDE & 3-SECTOR VECTORING CONTROLS -->
+    <aside class="absolute top-20 left-3 bottom-16 w-80 md:w-84 max-w-[90vw] z-20 flex flex-col gap-2.5 pointer-events-none">
+        <div class="glass-panel rounded-2xl p-3.5 flex flex-col gap-3 overflow-y-auto pointer-events-auto max-h-full">
+
+            <!-- Target Altitude Setpoint Z_ref (0 to 36 cm) -->
+            <div class="bg-slate-900/90 p-3 rounded-xl border border-emerald-500/35">
+                <div class="flex justify-between items-center mb-1">
+                    <label class="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                        <i class="fas fa-crosshairs"></i> Consigne Altitude ($Z_{\text{ref}}$)
+                    </label>
+                    <span id="val-zref" class="font-mono-tech text-sm font-extrabold text-emerald-400">22.0 cm</span>
+                </div>
+                <input id="slider-zref" type="range" class="slider-emerald" min="0" max="36" step="0.5" value="22.0" oninput="onSetpointChange()">
+
+                <!-- Quick Altitude Preset Buttons -->
+                <div class="grid grid-cols-4 gap-1 mt-2">
+                    <button onclick="setTargetAltitude(0)" class="py-1 rounded text-[10px] font-mono-tech font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">0 cm</button>
+                    <button onclick="setTargetAltitude(14)" class="py-1 rounded text-[10px] font-mono-tech font-bold bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 transition">14 cm</button>
+                    <button onclick="setTargetAltitude(22)" class="py-1 rounded text-[10px] font-mono-tech font-bold bg-emerald-600/40 hover:bg-emerald-600/60 text-emerald-200 border border-emerald-500/50 transition">22 cm</button>
+                    <button onclick="setTargetAltitude(32)" class="py-1 rounded text-[10px] font-mono-tech font-bold bg-slate-800 hover:bg-slate-700 text-purple-300 border border-slate-700 transition">32 cm</button>
+                </div>
+            </div>
+
+            <!-- Closed-Loop PID Controller Toggle & Gains -->
+            <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800 flex flex-col gap-2">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+                            <i class="fas fa-microchip"></i> Boucle PID Altitude (HC-SR04)
+                        </div>
+                        <div class="text-[10px] text-slate-400">Asservissement PWM du Gros THT 28 kV</div>
+                    </div>
+                    <button id="btn-pid-toggle" onclick="togglePIDLoop()" class="w-11 h-6 rounded-full bg-emerald-500 p-0.5 transition-colors relative flex items-center">
+                        <div id="knob-pid-toggle" class="w-5 h-5 rounded-full bg-white shadow-md transform translate-x-5 transition-transform"></div>
+                    </button>
+                </div>
+
+                <!-- Manual Voltage Slider (Enabled only when PID is OFF) -->
+                <div id="manual-voltage-box" class="opacity-50 pointer-events-none transition-opacity pt-1 border-t border-slate-800/80">
+                    <div class="flex justify-between text-[11px] mb-0.5">
+                        <span class="text-slate-400">Tension THT Manuelle ($V_{\text{THT}}$)</span>
+                        <span id="val-manual-kv" class="font-mono-tech text-sky-300 font-bold">23.4 kV</span>
+                    </div>
+                    <input id="slider-manual-kv" type="range" min="0" max="28" step="0.2" value="23.4" oninput="onManualKvChange()">
+                </div>
+
+                <!-- PID Gains (Kp, Ki, Kd) -->
+                <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-800/80 text-center">
+                    <div class="bg-slate-950/80 p-1.5 rounded-lg border border-slate-800">
+                        <div class="text-[9px] text-slate-400 uppercase">Gain $K_p$</div>
+                        <div class="font-mono-tech text-xs font-bold text-sky-400">1.85</div>
+                    </div>
+                    <div class="bg-slate-950/80 p-1.5 rounded-lg border border-slate-800">
+                        <div class="text-[9px] text-slate-400 uppercase">Intégral $K_i$</div>
+                        <div class="font-mono-tech text-xs font-bold text-emerald-400">0.92</div>
+                    </div>
+                    <div class="bg-slate-950/80 p-1.5 rounded-lg border border-slate-800">
+                        <div class="text-[9px] text-slate-400 uppercase">Dérivé $K_d$</div>
+                        <div class="font-mono-tech text-xs font-bold text-purple-400">1.40</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3-Sector Finless Attitude Stabilization (Secteurs A, B, C) -->
+            <div class="bg-slate-900/80 p-3 rounded-xl border border-purple-500/30 flex flex-col gap-2">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                            <i class="fas fa-compass"></i> Stabilisation 3 Secteurs (Sans Ailerons)
+                        </div>
+                        <div class="text-[10px] text-slate-400">Correction d'assiette par différentiel HT</div>
+                    </div>
+                    <button id="btn-sector-toggle" onclick="toggleSectorStabilization()" class="w-11 h-6 rounded-full bg-purple-600 p-0.5 transition-colors relative flex items-center">
+                        <div id="knob-sector-toggle" class="w-5 h-5 rounded-full bg-white shadow-md transform translate-x-5 transition-transform"></div>
+                    </button>
+                </div>
+
+                <!-- Live 3-Sector Voltage Bars -->
+                <div class="flex flex-col gap-1.5 pt-1 border-t border-slate-800/80">
+                    <div>
+                        <div class="flex justify-between text-[10px] font-mono-tech mb-0.5">
+                            <span class="text-sky-300">Secteur A (Avant-Gauche 120°)</span>
+                            <span id="val-kv-a" class="font-bold text-white">23.4 kV</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                            <div id="bar-kv-a" class="h-full bg-gradient-to-r from-sky-500 to-purple-500 transition-all duration-75" style="width: 82%;"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-[10px] font-mono-tech mb-0.5">
+                            <span class="text-purple-300">Secteur B (Avant-Droite 120°)</span>
+                            <span id="val-kv-b" class="font-bold text-white">23.4 kV</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                            <div id="bar-kv-b" class="h-full bg-gradient-to-r from-sky-500 to-purple-500 transition-all duration-75" style="width: 82%;"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-[10px] font-mono-tech mb-0.5">
+                            <span class="text-emerald-300">Secteur C (Arrière 120°)</span>
+                            <span id="val-kv-c" class="font-bold text-white">23.4 kV</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                            <div id="bar-kv-c" class="h-full bg-gradient-to-r from-sky-500 to-purple-500 transition-all duration-75" style="width: 82%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Manual Tilt Bias Slider -->
+                <div class="pt-1 border-t border-slate-800/80">
+                    <div class="flex justify-between text-[11px] mb-0.5">
+                        <span class="text-slate-400">Braquage Manuel ($\theta_{\text{bias}}$)</span>
+                        <span id="val-manual-tilt" class="font-mono-tech text-purple-300 font-bold">0.0°</span>
+                    </div>
+                    <input id="slider-manual-tilt" type="range" class="slider-purple" min="-15" max="15" step="0.5" value="0" oninput="onManualTiltChange()">
+                </div>
+            </div>
+
+            <!-- Exploded View & Visual Overlays -->
+            <div class="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 flex flex-col gap-2">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                        <i class="fas fa-cubes-stacked"></i> Vue Éclatée (Architecture 2 Étages)
+                    </span>
+                    <span id="val-exploded" class="font-mono-tech text-xs font-bold text-amber-400">0 %</span>
+                </div>
+                <input id="slider-exploded" type="range" class="slider-amber" min="0" max="100" step="1" value="0" oninput="updateExplodedView()">
+
+                <div class="grid grid-cols-2 gap-1.5 pt-1">
+                    <button id="btn-sonar-waves" onclick="toggleSonarWaves()" class="px-2 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition">
+                        <i class="fas fa-wave-square"></i><span>Ondes HC-SR04</span>
+                    </button>
+                    <button id="btn-3d-labels" onclick="toggle3DLabels()" class="px-2 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-400/40 text-indigo-300 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition">
+                        <i class="fas fa-tags"></i><span>Labels 3D</span>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </aside>
+
+    <!-- RIGHT PANEL: TELEMETRY, LIVE PID OSCILLOSCOPE & COMPONENT INSPECTOR -->
+    <aside class="absolute top-20 right-3 bottom-16 w-88 md:w-96 max-w-[92vw] z-20 flex flex-col gap-2.5 pointer-events-none">
+        <div class="glass-panel rounded-2xl p-3.5 flex flex-col gap-2.5 overflow-y-auto pointer-events-auto max-h-full">
+
+            <!-- Telemetry Status Header -->
+            <div class="flex items-center justify-between border-b border-slate-700/60 pb-2">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-200">Télémétrie Vol Stationnaire & PID</h2>
+                </div>
+                <span id="badge-flight-mode" class="text-[10px] font-mono-tech px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 font-bold">
+                    VERROUILLÉ À 22.0 CM
+                </span>
+            </div>
+
+            <!-- 4 KPI Readout Cards -->
+            <div class="grid grid-cols-2 gap-2">
+                <div class="bg-slate-900/85 p-2.5 rounded-xl border border-slate-800">
+                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Altitude HC-SR04 ($Z$)</div>
+                    <div class="flex items-baseline gap-1.5 mt-0.5">
+                        <span id="kpi-altitude" class="font-mono-tech text-lg font-extrabold text-emerald-400">22.0 cm</span>
+                        <span id="kpi-alt-error" class="font-mono-tech text-[11px] text-slate-400">(Err: 0.0cm)</span>
+                    </div>
+                    <div class="text-[10px] text-cyan-300 font-mono-tech mt-0.5">Écho Ultrason : <span id="kpi-echo-us">1294 µs</span></div>
+                </div>
+
+                <div class="bg-slate-900/85 p-2.5 rounded-xl border border-slate-800">
+                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Tension Gros THT ($V$)</div>
+                    <div class="flex items-baseline gap-1.5 mt-0.5">
+                        <span id="kpi-voltage" class="font-mono-tech text-lg font-extrabold text-sky-400">23.4 kV</span>
+                        <span id="kpi-pwm" class="font-mono-tech text-[11px] text-amber-300">PWM: 84%</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400 mt-0.5">Courant : <span id="kpi-current" class="text-purple-300 font-mono-tech">0.62 mA</span></div>
+                </div>
+
+                <div class="bg-slate-900/85 p-2.5 rounded-xl border border-slate-800">
+                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Poussée 2-Étages ($F$)</div>
+                    <div class="flex items-baseline gap-1.5 mt-0.5">
+                        <span id="kpi-thrust-mn" class="font-mono-tech text-base font-extrabold text-emerald-400">31.4 mN</span>
+                        <span id="kpi-thrust-gf" class="font-mono-tech text-xs text-slate-300">(3.20 gf)</span>
+                    </div>
+                    <div id="kpi-tw-ratio" class="text-[10px] text-sky-300 font-mono-tech mt-0.5">Masse Fusée : 3.20 g (T/W=1.00)</div>
+                </div>
+
+                <div class="bg-slate-900/85 p-2.5 rounded-xl border border-slate-800">
+                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Assiette & Stabilité</div>
+                    <div class="flex items-baseline gap-1.5 mt-0.5">
+                        <span id="kpi-tilt-angle" class="font-mono-tech text-base font-extrabold text-purple-400">0.0°</span>
+                        <span class="text-[10px] text-emerald-300 font-mono-tech">Sans Ailerons</span>
+                    </div>
+                    <div id="kpi-sector-state" class="text-[10px] text-slate-400 mt-0.5">3 Secteurs Équilibrés</div>
+                </div>
+            </div>
+
+            <!-- Real-Time PID Oscilloscope Canvas (Z_ref vs Z_actual & V_THT) -->
+            <div class="bg-slate-950/90 p-2.5 rounded-xl border border-slate-800/90">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                        <i class="fas fa-wave-square text-emerald-400"></i> Oscilloscope PID : Altitude $Z(t)$ & Tension THT
+                    </span>
+                    <div class="flex items-center gap-2 text-[9px] font-mono-tech">
+                        <span class="text-emerald-400">— Z(cm)</span>
+                        <span class="text-amber-300">-- Z_ref</span>
+                        <span class="text-sky-400">— kV</span>
+                    </div>
+                </div>
+                <canvas id="canvas-oscilloscope" width="340" height="125" class="w-full h-[125px] rounded bg-slate-900/70"></canvas>
+            </div>
+
+            <!-- Interactive 3D Component Inspector Card -->
+            <div class="bg-gradient-to-b from-slate-900/95 to-slate-950/95 p-3 rounded-xl border border-sky-500/40 flex flex-col gap-1.5">
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <span id="insp-category" class="text-[10px] font-mono-tech uppercase px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-400/30">Stabilisation & Propulsion EHD</span>
+                        <h3 id="insp-title" class="text-sm font-bold text-white mt-1">Fusée EHD Bi-Étage à 3 Secteurs Vectoriels (3,20 g)</h3>
+                    </div>
+                    <span id="insp-tag" class="font-mono-tech text-[11px] font-bold text-emerald-400 shrink-0 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">Gap d = 22 mm</span>
+                </div>
+                <p id="insp-desc" class="text-xs text-slate-300 leading-relaxed">
+                    Deux étages d'accélération superposés (« Turbo Ionique ») doublent la poussée sans augmenter le poids. Chaque couronne d'aluminium est divisée en 3 secteurs isolés (A, B, C) : en modulant la haute tension entre les 3 faces, la fusée corrige son inclinaison en quelques millisecondes sans aucun aileron mécanique.
+                </p>
+                <div class="grid grid-cols-2 gap-2 pt-1.5 border-t border-slate-800/90 text-[11px]">
+                    <div>
+                        <span class="text-slate-400 block text-[10px]">Spécification :</span>
+                        <span id="insp-spec" class="font-mono-tech text-cyan-300 font-medium">Balsa 1.5mm + Alu NACA + Fil 0.08mm</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block text-[10px]">Avantage Jury :</span>
+                        <span id="insp-benefit" class="text-amber-300 font-medium">Lévitation stable + 0 Pièce Mobile</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </aside>
+
+    <!-- BOTTOM BAR: CLICKABLE 3D SUBSYSTEM CHIPS -->
+    <footer class="absolute bottom-3 left-3 right-3 z-30 flex items-center justify-center pointer-events-none">
+        <div class="glass-panel px-3 py-2 rounded-xl flex items-center gap-1.5 overflow-x-auto max-w-full pointer-events-auto">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1 shrink-0 hidden sm:inline">
+                <i class="fas fa-hand-pointer text-sky-400 mr-1"></i>Inspecter Sous-Système 3D :
+            </span>
+            <button onclick="selectSubsystem('rocket')" id="chip-rocket" class="sub-chip px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-500/25 text-sky-200 border border-sky-400/50 shrink-0 transition">
+                1. Fusée Bi-Étage (Turbo Ionique)
+            </button>
+            <button onclick="selectSubsystem('sectors')" id="chip-sectors" class="sub-chip px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 border border-slate-700 shrink-0 transition">
+                2. Jupes 3 Secteurs (Sans Ailerons)
+            </button>
+            <button onclick="selectSubsystem('hcsr04')" id="chip-hcsr04" class="sub-chip px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 border border-slate-700 shrink-0 transition">
+                3. Sonar Altitude HC-SR04
+            </button>
+            <button onclick="selectSubsystem('tht28')" id="chip-tht28" class="sub-chip px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 border border-slate-700 shrink-0 transition">
+                4. Gros THT TV Couleur (28 kV DC)
+            </button>
+            <button onclick="selectSubsystem('ballast')" id="chip-ballast" class="sub-chip px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 border border-slate-700 shrink-0 transition">
+                5. Ballast Sécurité 10× 1 MΩ
+            </button>
+            <button onclick="selectSubsystem('esp32')" id="chip-esp32" class="sub-chip px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 border border-slate-700 shrink-0 transition">
+                6. ESP32 PID & Répartiteur 3 Voies
+            </button>
+        </div>
+    </footer>
+
+    <!-- MAIN SCRIPT: 3D ROCKET, 3-SECTOR PLASMA, HC-SR04 SONAR & PID PHYSICS -->
+    <script>
+        // ============================================================================
+        // 1. SUBSYSTEM TECHNICAL DATABASE
+        // ============================================================================
+        const SUBSYSTEM_DB = {
+            rocket: {
+                category: "Propulsion Électrohydrodynamique Multi-Étages",
+                title: "Fusée EHD Bi-Étage « Turbo Ionique » Ultra-Légère (3,20 g)",
+                tag: "Ratio T/W max = 2,15",
+                spec: "Châssis Balsa 1.5mm + 2 Couronnes Corona",
+                benefit: "Double la poussée à tension égale",
+                desc: "Construite en fines baguettes de balsa (3,20 g au total) et guidée par deux fils de nylon tendus, la fusée superpose deux étages d'ionisation : l'étage supérieur aspire l'air ambiant et l'accélère vers le bas, puis l'étage inférieur reprend ce flux pour lui donner une seconde accélération électrique.",
+                camPos: { x: -1.1, y: 3.3, z: 5.2 },
+                lookAt: { x: -1.4, y: 2.1, z: 0 }
+            },
+            sectors: {
+                category: "Guidage Vectoriel 100 % Électronique",
+                title: "Stabilisation Active à 3 Secteurs d'Aluminium (A, B, C)",
+                tag: "0 Aileron Mobile",
+                spec: "3 Jupes NACA espacées de 5 mm (120°)",
+                benefit: "Redresse l'inclinaison en < 5 ms",
+                desc: "Au lieu d'une jupe d'aluminium continue, chaque étage est séparé en 3 secteurs indépendants (Secteur A Avant-Gauche, Secteur B Avant-Droite, Secteur C Arrière). Si la fusée penche, le répartiteur augmente la tension sur le secteur bas : le plasma y brille plus fort et redresse instantanément la fusée.",
+                camPos: { x: -0.4, y: 2.7, z: 3.6 },
+                lookAt: { x: -1.4, y: 2.0, z: 0 }
+            },
+            hcsr04: {
+                category: "Capteur de Télémétrie & Boucle Fermée",
+                title: "Sonar Ultrasonique d'Altitude HC-SR04 (Mesure Temps Réel)",
+                tag: "Précision ±2 mm",
+                spec: "Émission 40 kHz • Lecture 50 Hz vers ESP32",
+                benefit: "Maintient l'altitude face aux perturbations",
+                desc: "Fixé au centre de la base de lancement et orienté vers le haut, le capteur HC-SR04 envoie des impulsions ultrasonores à 40 kHz qui rebondissent sous la fusée. L'ESP32 mesure le temps d'écho pour calculer la hauteur Z exacte et ajuster la puissance du THT en boucle fermée (PID).",
+                camPos: { x: -1.2, y: 1.2, z: 3.4 },
+                lookAt: { x: -1.4, y: 0.45, z: 0 }
+            },
+            tht28: {
+                category: "Source Haute Puissance Récupérée",
+                title: "Gros Transformateur THT de Télévision Couleur (24–28 kV DC)",
+                tag: "Sortie 28 kV DC",
+                spec: "Molettes FOCUS/SCREEN + 5 Spires Ferrite",
+                benefit: "3× plus de poussée sans multiplicateur externe",
+                desc: "Extrait d'un téléviseur cathodique couleur (14\" à 29\"), ce gros transformateur THT intègre des diodes haute tension capables de délivrer jusqu'à 28 kV DC directement par son câble rouge. Il est piloté par 5 tours de fil bobinés sur son noyau en ferrite gris et hachés en PWM par le gros transistor sur radiateur.",
+                camPos: { x: 3.1, y: 2.2, z: 3.7 },
+                lookAt: { x: 2.1, y: 0.85, z: -0.4 }
+            },
+            ballast: {
+                category: "Protection Physique & Anti-Arc",
+                title: "Chaîne Ballast de 10 Résistances de 1 MΩ en Série (10 MΩ)",
+                tag: "I_max < 2.8 mA",
+                spec: "10 × 1 MΩ (1W) sous tube acrylique isolant",
+                benefit: "Sécurité totale du jury + Zéro étincelle",
+                desc: "Placée en série à la sortie du câble rouge 28 kV avant les fils d'alimentation de la fusée, cette chaîne de 10 résistances de 1 MΩ empêche le courant de dépasser 2,8 mA même en cas de court-circuit, stabilisant l'effet couronne violet sans claquage destructeur.",
+                camPos: { x: 1.9, y: 1.8, z: 3.1 },
+                lookAt: { x: 1.15, y: 0.85, z: 0.15 }
+            },
+            esp32: {
+                category: "Intelligence Embarquée & Asservissement",
+                title: "Contrôleur ESP32 PID + Répartiteur Haute Tension 3 Voies",
+                tag: "Boucle PID 100 Hz",
+                spec: "Algorithme PID + Modulation PWM 25 kHz",
+                benefit: "Pilotage Wi-Fi en direct par le jury",
+                desc: "L'ESP32 compare 100 fois par seconde l'altitude mesurée Z(t) par le capteur HC-SR04 avec la consigne Z_ref choisie. Si un membre du jury appuie sur la fusée avec une baguette, l'ESP32 augmente immédiatement la tension jusqu'à 27,8 kV pour contrer la main et ramener la fusée à sa consigne.",
+                camPos: { x: 2.8, y: 1.8, z: 4.1 },
+                lookAt: { x: 2.0, y: 0.35, z: 1.55 }
+            }
+        };
+
+        // ============================================================================
+        // 2. CLOSED-LOOP PID & MULTIPHYSICS SIMULATION STATE
+        // ============================================================================
+        const sim = {
+            // Altitude Setpoint & Actual Kinematics (in cm, 0 to 38 cm)
+            zRefCm: 22.0,
+            zActualCm: 22.0,
+            zVelocityCmS: 0.0,
+            integralError: 0.0,
+            prevError: 0.0,
+
+            // Control Modes
+            pidEnabled: true,
+            sectorStabEnabled: true,
+            autoDemo: false,
+            autoDemoTimer: 0.0,
+
+            // High Voltage & Thrust Physics (Large Color TV THT: 0 to 28.0 kV)
+            vOnsetKv: 7.4,            // Corona onset voltage for d = 22 mm
+            vMaxKv: 28.0,             // Max output of large Color TV THT
+            vCommandKv: 23.4,         // Base voltage commanded by PID or Manual slider
+            vSectorA: 23.4,           // Sector A (Front-Left) kV
+            vSectorB: 23.4,           // Sector B (Front-Right) kV
+            vSectorC: 23.4,           // Sector C (Rear) kV
+            rocketMassG: 3.20,        // 3.20 grams 2-stage balsa rocket
+            thrustMn: 31.4,           // Total vertical thrust in mN (31.39 mN = 3.20 gf hover)
+            thrustGf: 3.20,
+            currentMa: 0.62,
+
+            // Attitude (Roll/Pitch Tilt Angle in degrees) & External Perturbations
+            tiltAngleDeg: 0.0,        // Current rocket tilt angle
+            tiltVelocityDegS: 0.0,
+            manualTiltBiasDeg: 0.0,
+            pushForceCmS2: 0.0,       // Downward perturbation from jury rod push
+            pushTimer: 0.0,
+            windTorqueDegS2: 0.0,     // Lateral wind gust torque
+            windTimer: 0.0,
+
+            // Visual Options
+            explodedFactor: 0.0,
+            showSonar: true,
+            showLabels: true,
+
+            // Oscilloscope Rolling History (120 samples)
+            histZRef: new Array(120).fill(22.0),
+            histZAct: new Array(120).fill(22.0),
+            histKv: new Array(120).fill(23.4)
+        };
+
+        // ============================================================================
+        // 3. PROCEDURAL PBR TEXTURES & STUDIO ENVIRONMENT
+        // ============================================================================
+        function createStudioEnvironment(renderer) {
+            const pmrem = new THREE.PMREMGenerator(renderer);
+            pmrem.compileEquirectangularShader();
+            const s = new THREE.Scene();
+            s.background = new THREE.Color(0x070d1c);
+
+            const top = new THREE.Mesh(
+                new THREE.PlaneGeometry(24, 24),
+                new THREE.MeshBasicMaterial({ color: 0xe0f2fe, side: THREE.DoubleSide })
+            );
+            top.position.set(0, 12, 0);
+            top.rotation.x = Math.PI / 2;
+            s.add(top);
+
+            const side1 = new THREE.Mesh(
+                new THREE.PlaneGeometry(16, 9),
+                new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide })
+            );
+            side1.position.set(-11, 5, 7);
+            side1.lookAt(0, 0, 0);
+            s.add(side1);
+
+            const side2 = new THREE.Mesh(
+                new THREE.PlaneGeometry(16, 9),
+                new THREE.MeshBasicMaterial({ color: 0xc084fc, side: THREE.DoubleSide })
+            );
+            side2.position.set(11, 5, -7);
+            side2.lookAt(0, 0, 0);
+            s.add(side2);
+
+            const env = pmrem.fromScene(s, 0.04).texture;
+            pmrem.dispose();
+            return env;
+        }
+
+        function createBenchGridTexture() {
+            const c = document.createElement('canvas');
+            c.width = 1024; c.height = 1024;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#090f1d';
+            ctx.fillRect(0, 0, 1024, 1024);
+
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.11)';
+            ctx.lineWidth = 1;
+            const step = 32;
+            for (let i = 0; i <= 1024; i += step) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 1024); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(1024, i); ctx.stroke();
+            }
+            for (let x = step / 2; x < 1024; x += step) {
+                for (let y = step / 2; y < 1024; y += step) {
+                    ctx.beginPath();
+                    ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+                    ctx.fillStyle = '#020617';
+                    ctx.fill();
+                }
+            }
+            const t = new THREE.CanvasTexture(c);
+            t.wrapS = THREE.RepeatWrapping;
+            t.wrapT = THREE.RepeatWrapping;
+            t.repeat.set(3, 2);
+            return t;
+        }
+
+        function createRulerScaleTexture() {
+            const c = document.createElement('canvas');
+            c.width = 128; c.height = 1024;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, 128, 1024);
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(2, 2, 124, 1020);
+
+            // Graduations from 0 cm (bottom) to 40 cm (top)
+            for (let cm = 0; cm <= 40; cm++) {
+                const y = 980 - (cm / 40) * 920;
+                const isMajor = (cm % 5 === 0);
+                ctx.strokeStyle = isMajor ? '#38bdf8' : '#64748b';
+                ctx.lineWidth = isMajor ? 3 : 1.5;
+                ctx.beginPath();
+                ctx.moveTo(isMajor ? 55 : 85, y);
+                ctx.lineTo(124, y);
+                ctx.stroke();
+
+                if (isMajor) {
+                    ctx.fillStyle = '#e2e8f0';
+                    ctx.font = 'bold 22px "JetBrains Mono", monospace';
+                    ctx.fillText(`${cm}`, 12, y + 7);
+                }
+            }
+            return new THREE.CanvasTexture(c);
+        }
+
+        function createBalsaWoodTexture() {
+            const c = document.createElement('canvas');
+            c.width = 256; c.height = 256;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#e8cda2';
+            ctx.fillRect(0, 0, 256, 256);
+            ctx.fillStyle = '#c89d66';
+            for (let i = 0; i < 500; i++) {
+                ctx.globalAlpha = 0.22;
+                ctx.fillRect(Math.random() * 256, 0, 1.5, 256);
+            }
+            return new THREE.CanvasTexture(c);
+        }
+
+        function createColorTHTLabelTexture() {
+            const c = document.createElement('canvas');
+            c.width = 512; c.height = 256;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 0, 512, 256);
+            ctx.strokeStyle = '#f59e0b';
+            ctx.lineWidth = 6;
+            ctx.strokeRect(8, 8, 496, 240);
+
+            ctx.fillStyle = '#f59e0b';
+            ctx.font = 'bold 26px "JetBrains Mono", monospace';
+            ctx.fillText('DANGER HIGH VOLTAGE', 32, 50);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 34px "JetBrains Mono", monospace';
+            ctx.fillText('THT TV COULEUR 29"', 32, 105);
+
+            ctx.fillStyle = '#38bdf8';
+            ctx.font = 'bold 26px "JetBrains Mono", monospace';
+            ctx.fillText('OUTPUT: 24.0 - 28.0 kV DC', 32, 155);
+
+            ctx.fillStyle = '#cbd5e1';
+            ctx.font = '22px sans-serif';
+            ctx.fillText('DIODE SPLIT • FOCUS / SCREEN', 32, 205);
+            return new THREE.CanvasTexture(c);
+        }
+
+        // ============================================================================
+        // 4. THREE.JS SCENE, CAMERA, LIGHTS & PBR MATERIALS
+        // ============================================================================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x04070f);
+        scene.fog = new THREE.FogExp2(0x04070f, 0.018);
+
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 150);
+        camera.position.set(0.2, 3.8, 9.2);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.22;
+        container.appendChild(renderer.domElement);
+
+        scene.environment = createStudioEnvironment(renderer);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.maxPolarAngle = Math.PI / 2 - 0.01;
+        controls.minDistance = 1.8;
+        controls.maxDistance = 20.0;
+        controls.target.set(-0.2, 2.0, 0);
+
+        // Studio Lights
+        scene.add(new THREE.AmbientLight(0xdbeafe, 0.65));
+
+        const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
+        keyLight.position.set(6, 12, 8);
+        keyLight.castShadow = true;
+        keyLight.shadow.mapSize.width = 2048;
+        keyLight.shadow.mapSize.height = 2048;
+        keyLight.shadow.bias = -0.0005;
+        scene.add(keyLight);
+
+        const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.75);
+        rimLight.position.set(-8, 6, -6);
+        scene.add(rimLight);
+
+        // Dynamic Corona Plasma Light on the Rocket
+        const rocketPlasmaLight = new THREE.PointLight(0xa855f7, 2.0, 7);
+        rocketPlasmaLight.position.set(-1.4, 2.2, 0);
+        scene.add(rocketPlasmaLight);
+
+        const MAT = {
+            aluMirror: new THREE.MeshStandardMaterial({
+                color: 0xe2e8f0, metalness: 0.96, roughness: 0.08, side: THREE.DoubleSide
+            }),
+            aluBrushed: new THREE.MeshStandardMaterial({
+                color: 0xcbd5e1, metalness: 0.85, roughness: 0.24
+            }),
+            copper: new THREE.MeshStandardMaterial({
+                color: 0xea580c, metalness: 0.92, roughness: 0.18
+            }),
+            balsa: new THREE.MeshStandardMaterial({
+                map: createBalsaWoodTexture(), roughness: 0.72, metalness: 0.02
+            }),
+            acrylic: new THREE.MeshPhysicalMaterial({
+                color: 0xe0f2fe, transparent: true, opacity: 0.34, roughness: 0.08, metalness: 0.05, transmission: 0.55
+            }),
+            plaBlack: new THREE.MeshStandardMaterial({
+                color: 0x18181b, roughness: 0.4, metalness: 0.15
+            }),
+            ferrite: new THREE.MeshStandardMaterial({
+                color: 0x3f3f46, roughness: 0.55, metalness: 0.28
+            }),
+            hvRed: new THREE.MeshStandardMaterial({
+                color: 0xdc2626, roughness: 0.28, metalness: 0.1
+            }),
+            resistorOrange: new THREE.MeshStandardMaterial({
+                color: 0xf59e0b, roughness: 0.35, metalness: 0.1
+            }),
+            pcbBlue: new THREE.MeshStandardMaterial({
+                color: 0x0284c7, roughness: 0.3, metalness: 0.25
+            }),
+            pcbDark: new THREE.MeshStandardMaterial({
+                color: 0x0f172a, roughness: 0.32, metalness: 0.3
+            })
+        };
+
+        const clickableMeshes = [];
+        function registerClickable(obj, subKey) {
+            obj.userData.subKey = subKey;
+            obj.traverse(c => {
+                if (c.isMesh) {
+                    c.userData.subKey = subKey;
+                    clickableMeshes.push(c);
+                }
+            });
+        }
+
+        // Laboratory Optical Table
+        const benchMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(12.5, 0.35, 7.8),
+            new THREE.MeshStandardMaterial({ map: createBenchGridTexture(), roughness: 0.45, metalness: 0.45 })
+        );
+        benchMesh.position.set(0.2, -0.175, 0);
+        benchMesh.receiveShadow = true;
+        scene.add(benchMesh);
+
+        // ============================================================================
+        // 5. LAUNCH TOWER (50 CM), GRADUATED RULER, LASER TARGET & HC-SR04 SONAR
+        // ============================================================================
+        const towerX = -1.4;
+        const launchTowerGroup = new THREE.Group();
+        launchTowerGroup.position.set(towerX, 0, 0);
+        scene.add(launchTowerGroup);
+
+        // Heavy Anti-Static Launchpad Base
+        const padBase = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.75, 0.12, 36), MAT.plaBlack);
+        padBase.position.set(0, 0.06, 0);
+        padBase.receiveShadow = true;
+        launchTowerGroup.add(padBase);
+
+        // 3 Insulating Landing Pads around the center HC-SR04 sensor
+        for (let i = 0; i < 3; i++) {
+            const a = (i * Math.PI * 2) / 3 + Math.PI / 6;
+            const legPad = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.06, 16), MAT.acrylic);
+            legPad.position.set(Math.cos(a) * 0.78, 0.15, Math.sin(a) * 0.78);
+            launchTowerGroup.add(legPad);
+        }
+
+        // 2 Vertical Aluminum Gantry Uprights + Top Clear Acrylic Arch
+        for (let side of [-1.42, 1.42]) {
+            const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 5.0, 20), MAT.aluBrushed);
+            pillar.position.set(side, 2.5, -0.35);
+            pillar.castShadow = true;
+            launchTowerGroup.add(pillar);
+        }
+        const topArch = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.12, 0.95), MAT.acrylic);
+        topArch.position.set(0, 5.0, -0.1);
+        launchTowerGroup.add(topArch);
+
+        // 2 Vertical Taut Nylon Guide Wires (passing through the rocket's Teflon guide rings)
+        for (let gSide of [-0.78, 0.78]) {
+            const nylonWire = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.007, 0.007, 4.88, 8),
+                new THREE.MeshBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.65 })
+            );
+            nylonWire.position.set(gSide, 2.5, 0);
+            launchTowerGroup.add(nylonWire);
+        }
+
+        // Illuminated Graduated Altitude Ruler (0 to 40 cm) on the Left Tower Upright
+        const rulerBoard = new THREE.Mesh(
+            new THREE.BoxGeometry(0.32, 4.4, 0.04),
+            new THREE.MeshBasicMaterial({ map: createRulerScaleTexture() })
+        );
+        rulerBoard.position.set(-1.18, 2.38, -0.32);
+        launchTowerGroup.add(rulerBoard);
+
+        // 3D Glowing Laser Setpoint Marker ($Z_{ref}$) sliding on the graduated ruler
+        const setpointMarkerGroup = new THREE.Group();
+        launchTowerGroup.add(setpointMarkerGroup);
+
+        const markerPointer = new THREE.Mesh(
+            new THREE.BoxGeometry(0.42, 0.05, 0.08),
+            new THREE.MeshBasicMaterial({ color: 0x10b981 })
+        );
+        markerPointer.position.set(-1.16, 0, -0.3);
+        setpointMarkerGroup.add(markerPointer);
+
+        // Dashed horizontal laser reference ring showing the target hover altitude plane
+        const targetRingGeo = new THREE.RingGeometry(0.88, 0.91, 48);
+        targetRingGeo.rotateX(Math.PI / 2);
+        const targetLaserRing = new THREE.Mesh(
+            targetRingGeo,
+            new THREE.MeshBasicMaterial({ color: 0x10b981, side: THREE.DoubleSide, transparent: true, opacity: 0.55 })
+        );
+        setpointMarkerGroup.add(targetLaserRing);
+
+        // ----------------------------------------------------------------------------
+        // HC-SR04 ULTRASONIC ALTITUDE SENSOR (Mounted at Center of Launchpad Base)
+        // ----------------------------------------------------------------------------
+        const hcsr04Group = new THREE.Group();
+        hcsr04Group.position.set(0, 0.14, 0);
+        launchTowerGroup.add(hcsr04Group);
+
+        // Blue PCB (45mm x 20mm scaled) facing straight UP
+        const hcPcb = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.04, 0.36), MAT.pcbBlue);
+        hcPcb.position.set(0, 0.02, 0);
+        hcsr04Group.add(hcPcb);
+
+        // Silver quartz crystal between cylinders
+        const hcCrystal = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.05, 0.07), MAT.aluMirror);
+        hcCrystal.position.set(0, 0.05, -0.1);
+        hcsr04Group.add(hcCrystal);
+
+        // Two Iconic Ultrasonic Cylinders (T = Transmitter, R = Receiver) pointing straight UP (+Y)
+        for (let xCyl of [-0.21, 0.21]) {
+            const outerCan = new THREE.Mesh(new THREE.CylinderGeometry(0.135, 0.135, 0.22, 28), MAT.aluBrushed);
+            outerCan.position.set(xCyl, 0.14, 0);
+            hcsr04Group.add(outerCan);
+
+            const darkMesh = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.11, 0.11, 0.225, 24),
+                new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.7, metalness: 0.4 })
+            );
+            darkMesh.position.set(xCyl, 0.14, 0);
+            hcsr04Group.add(darkMesh);
+        }
+
+        // Animated 3D Ultrasonic Acoustic Wave Rings (Rising Cyan Pulse + Returning Emerald Echo)
+        const sonarWavesGroup = new THREE.Group();
+        launchTowerGroup.add(sonarWavesGroup);
+
+        const sonarRings = [];
+        for (let w = 0; w < 5; w++) {
+            const isEcho = (w >= 3);
+            const rMat = new THREE.MeshBasicMaterial({
+                color: isEcho ? 0x10b981 : 0x38bdf8,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.65,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            const rGeo = new THREE.RingGeometry(0.14, 0.18, 32);
+            rGeo.rotateX(Math.PI / 2);
+            const rMesh = new THREE.Mesh(rGeo, rMat);
+            sonarWavesGroup.add(rMesh);
+            sonarRings.push({ mesh: rMesh, phase: (w % 3) / 3.0, isEcho });
+        }
+
+        registerClickable(hcsr04Group, 'hcsr04');
+
+        // ============================================================================
+        // 6. THE 2-STAGE EHD ROCKET WITH 3 INDEPENDENT VECTORING SECTORS (A, B, C)
+        // ============================================================================
+        const rocketRootGroup = new THREE.Group();
+        rocketRootGroup.position.set(towerX, 2.38, 0);
+        scene.add(rocketRootGroup);
+
+        // Gimbal pivot inside rocketRootGroup for smooth roll/pitch tilt visualization
+        const rocketTiltGroup = new THREE.Group();
+        rocketRootGroup.add(rocketTiltGroup);
+
+        // Sub-groups for Exploded View
+        const noseConeGroup = new THREE.Group();
+        const upperStageGroup = new THREE.Group(); // Stage 1 (Top Accelerator)
+        const lowerStageGroup = new THREE.Group(); // Stage 2 (Bottom Main Thruster)
+        rocketTiltGroup.add(noseConeGroup, upperStageGroup, lowerStageGroup);
+
+        // 3 Vertical Balsa Wood Longerons + Aerodynamic Ogive Nosecone
+        for (let i = 0; i < 3; i++) {
+            const ang = (i * Math.PI * 2) / 3 + Math.PI / 6;
+            const rStrut = 0.76;
+            const xS = Math.cos(ang) * rStrut;
+            const zS = Math.sin(ang) * rStrut;
+
+            // Vertical Balsa Strut (1.5mm x 1.5mm scaled)
+            const strut = new THREE.Mesh(new THREE.BoxGeometry(0.036, 1.68, 0.036), MAT.balsa);
+            strut.position.set(xS, 0.84, zS);
+            strut.castShadow = true;
+            upperStageGroup.add(strut);
+
+            // Slanted Balsa Nosecone Ribs converging to top spire
+            const rib = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.022, 0.95, 8), MAT.balsa);
+            rib.position.set(xS * 0.5, 2.02, zS * 0.5);
+            rib.lookAt(0, 2.45, 0);
+            rib.rotateX(Math.PI / 2);
+            noseConeGroup.add(rib);
+        }
+
+        // Aerodynamic Nosecone Tip + Central Balsa Spine
+        const spireTip = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.28, 16), MAT.balsa);
+        spireTip.position.set(0, 2.45, 0);
+        noseConeGroup.add(spireTip);
+
+        // Bottom Ultrasonic Reflector Target Disc (Lightweight balsa/foil disc at Y = 0.05 so HC-SR04 gets a clean echo)
+        const sonarTargetDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.015, 24), MAT.balsa);
+        sonarTargetDisc.position.set(0, 0.06, 0);
+        lowerStageGroup.add(sonarTargetDisc);
+
+        // 2 Teflon Guide Lugs sliding along the vertical nylon threads at X = ±0.78
+        for (let gSide of [-0.78, 0.78]) {
+            const lug = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.014, 10, 20), MAT.acrylic);
+            lug.position.set(gSide, 0.85, 0);
+            lug.rotation.x = Math.PI / 2;
+            upperStageGroup.add(lug);
+        }
+
+        // ----------------------------------------------------------------------------
+        // BUILD THE 2 STAGES × 3 INDEPENDENT VECTORING SECTORS (SECTEUR A, B, C)
+        // ----------------------------------------------------------------------------
+        // Sector A: Front-Left (center angle 150°), Sector B: Front-Right (30°), Sector C: Rear (270° / -90°)
+        const sectorAngles = [
+            { id: 'A', startAngle: Math.PI / 2 + 0.09, centerAngle: (5 * Math.PI) / 6 },
+            { id: 'B', startAngle: -Math.PI / 6 + 0.09, centerAngle: Math.PI / 6 },
+            { id: 'C', startAngle: (7 * Math.PI) / 6 + 0.09, centerAngle: (3 * Math.PI) / 2 }
+        ];
+        const arcSpan = (Math.PI * 2) / 3 - 0.18; // 120° minus 5mm insulating gap between sectors
+
+        const sectorGlowMeshes = { A: [], B: [], C: [] };
+        const sectorSkirtMeshes = [];
+
+        const stageConfigs = [
+            { grp: upperStageGroup, yBase: 1.18, rTop: 0.68, rBot: 0.74 },
+            { grp: lowerStageGroup, yBase: 0.38, rTop: 0.68, rBot: 0.74 }
+        ];
+
+        stageConfigs.forEach(st => {
+            // Internal Balsa Support Triangle Frame
+            const frameRing = new THREE.Mesh(new THREE.TorusGeometry(st.rTop * 0.96, 0.018, 8, 3), MAT.balsa);
+            frameRing.position.set(0, st.yBase, 0);
+            frameRing.rotation.x = Math.PI / 2;
+            frameRing.rotation.z = Math.PI / 6;
+            st.grp.add(frameRing);
+
+            // Build the 3 Independent Aluminum Foil Collector Sectors + 3 Independent Corona Emitter Arcs
+            sectorAngles.forEach(sec => {
+                // 1. Curved NACA-profiled Aluminum Foil Sector Skirt (110° arc)
+                const skirtGeo = new THREE.CylinderGeometry(
+                    st.rTop, st.rBot, 0.42, 24, 1, true, sec.startAngle, arcSpan
+                );
+                const skirtMesh = new THREE.Mesh(skirtGeo, MAT.aluMirror);
+                skirtMesh.position.set(0, st.yBase, 0);
+                skirtMesh.castShadow = true;
+                st.grp.add(skirtMesh);
+                sectorSkirtMeshes.push({ mesh: skirtMesh, centerAngle: sec.centerAngle });
+
+                // Rolled smooth aluminum top leading edge for this sector
+                const rimArc = new THREE.Mesh(
+                    new THREE.TorusGeometry(st.rTop, 0.022, 10, 24, arcSpan),
+                    MAT.aluBrushed
+                );
+                rimArc.position.set(0, st.yBase + 0.21, 0);
+                rimArc.rotation.x = Math.PI / 2;
+                rimArc.rotation.z = -sec.startAngle - arcSpan + Math.PI / 2;
+                st.grp.add(rimArc);
+
+                // 2. Hair-thin 0.08 mm Copper Corona Emitter Wire Segment (22 mm above collector skirt)
+                const wireArc = new THREE.Mesh(
+                    new THREE.TorusGeometry(st.rTop * 0.96, 0.007, 8, 24, arcSpan),
+                    MAT.copper
+                );
+                wireArc.position.set(0, st.yBase + 0.43, 0);
+                wireArc.rotation.x = Math.PI / 2;
+                wireArc.rotation.z = -sec.startAngle - arcSpan + Math.PI / 2;
+                st.grp.add(wireArc);
+
+                // 3. Sector-Specific Violet-Blue Corona Plasma Glow Halo
+                const glowMat = new THREE.MeshBasicMaterial({
+                    color: 0xa855f7,
+                    transparent: true,
+                    opacity: 0.75,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false
+                });
+                const glowArc = new THREE.Mesh(
+                    new THREE.TorusGeometry(st.rTop * 0.96, 0.052, 14, 24, arcSpan),
+                    glowMat
+                );
+                glowArc.position.set(0, st.yBase + 0.43, 0);
+                glowArc.rotation.x = Math.PI / 2;
+                glowArc.rotation.z = -sec.startAngle - arcSpan + Math.PI / 2;
+                st.grp.add(glowArc);
+                sectorGlowMeshes[sec.id].push(glowArc);
+            });
+        });
+
+        registerClickable(noseConeGroup, 'rocket');
+        registerClickable(upperStageGroup, 'rocket');
+        registerClickable(lowerStageGroup, 'sectors');
+
+        // ----------------------------------------------------------------------------
+        // 3D VISUAL PERTURBATION ROD ("BAGUETTE DU JURY") & LATERAL WIND ARROW
+        // ----------------------------------------------------------------------------
+        const juryRodGroup = new THREE.Group();
+        juryRodGroup.visible = false;
+        scene.add(juryRodGroup);
+
+        // Insulating Acrylic Rod pushing down on the rocket nosecone
+        const rodShaft = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.035, 0.035, 2.2, 16),
+            new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.85 })
+        );
+        rodShaft.position.set(0, 1.2, 0.6);
+        rodShaft.rotation.x = 0.6;
+        juryRodGroup.add(rodShaft);
+
+        const pushCone = new THREE.Mesh(
+            new THREE.ConeGeometry(0.12, 0.28, 16),
+            new THREE.MeshBasicMaterial({ color: 0xfef08a })
+        );
+        pushCone.position.set(0, 0.15, 0);
+        pushCone.rotation.x = Math.PI;
+        juryRodGroup.add(pushCone);
+
+        // ============================================================================
+        // 7. RIGHT SIDE OF BENCH: LARGE COLOR TV THT (28 kV), 10MΩ BALLAST & ESP32 PID
+        // ============================================================================
+        const powerBenchGroup = new THREE.Group();
+        scene.add(powerBenchGroup);
+
+        // A. Large Color TV Flyback Transformer (14"-29", 24-28 kV DC with FOCUS & SCREEN Knobs)
+        const tht28Group = new THREE.Group();
+        tht28Group.position.set(2.15, 0, -0.45);
+        powerBenchGroup.add(tht28Group);
+
+        // Molded base & main HV potted black tower
+        const thtBaseBlock = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.22, 1.15), MAT.plaBlack);
+        thtBaseBlock.position.set(0, 0.11, 0);
+        tht28Group.add(thtBaseBlock);
+
+        const thtMainTower = new THREE.Mesh(new THREE.CylinderGeometry(0.54, 0.58, 1.65, 36), MAT.plaBlack);
+        thtMainTower.position.set(0.1, 0.95, 0);
+        thtMainTower.castShadow = true;
+        tht28Group.add(thtMainTower);
+
+        // Authentic 28 kV Color TV THT Technical Label on cylinder front
+        const thtSticker = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.585, 0.585, 0.65, 32, 1, true, -0.65, 1.3),
+            new THREE.MeshBasicMaterial({ map: createColorTHTLabelTexture(), side: THREE.DoubleSide })
+        );
+        thtSticker.position.set(0.1, 1.0, 0);
+        tht28Group.add(thtSticker);
+
+        // Side Focus / Screen Bleeder Box with the 2 Iconic Rotary Knobs (FOCUS & SCREEN)
+        const focusBox = new THREE.Mesh(new THREE.BoxGeometry(0.38, 1.15, 0.52), MAT.plaBlack);
+        focusBox.position.set(0.52, 0.85, 0.22);
+        tht28Group.add(focusBox);
+
+        for (let kIdx = 0; kIdx < 2; kIdx++) {
+            const knob = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.11, 0.11, 0.14, 20),
+                new THREE.MeshStandardMaterial({ color: kIdx === 0 ? 0xe2e8f0 : 0xef4444, roughness: 0.3 })
+            );
+            knob.rotation.z = Math.PI / 2;
+            knob.position.set(0.74, 1.12 - kIdx * 0.45, 0.22);
+            tht28Group.add(knob);
+        }
+
+        // Exposed Large U-Shaped Ferrite Core + 5 Primary Turns of Insulated Wire
+        const largeFerrite = new THREE.Mesh(new THREE.BoxGeometry(0.32, 1.72, 0.78), MAT.ferrite);
+        largeFerrite.position.set(-0.46, 0.98, 0);
+        tht28Group.add(largeFerrite);
+
+        for (let t = 0; t < 5; t++) {
+            const turn = new THREE.Mesh(
+                new THREE.TorusGeometry(0.25, 0.03, 12, 24),
+                new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.25 })
+            );
+            turn.position.set(-0.56, 0.62 + t * 0.15, 0);
+            turn.rotation.x = Math.PI / 2;
+            tht28Group.add(turn);
+        }
+
+        // Large Finned Aluminum Heatsink + Power Switching Transistor (BU508 / IRFP250) next to THT
+        const hsPlate = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.25, 1.05), MAT.aluBrushed);
+        hsPlate.position.set(1.15, 0.65, -0.45);
+        hsPlate.castShadow = true;
+        tht28Group.add(hsPlate);
+
+        for (let f = -3; f <= 3; f++) {
+            const fin = new THREE.Mesh(new THREE.BoxGeometry(0.32, 1.22, 0.035), MAT.aluBrushed);
+            fin.position.set(1.32, 0.65, -0.45 + f * 0.14);
+            tht28Group.add(fin);
+        }
+
+        // Thick Red Silicone 28 kV Anode Cable arching from top of THT to the 10 MOhm Ballast Chain
+        const hvAnodeCurve = new THREE.CatmullRomCurve3([
+            new THREE.Vector3(0.1, 1.78, 0),
+            new THREE.Vector3(0.0, 2.25, 0.2),
+            new THREE.Vector3(-0.55, 1.6, 0.45),
+            new THREE.Vector3(-1.0, 0.85, 0.6)
+        ]);
+        const hvAnodeCable = new THREE.Mesh(new THREE.TubeGeometry(hvAnodeCurve, 32, 0.045, 14, false), MAT.hvRed);
+        hvAnodeCable.castShadow = true;
+        tht28Group.add(hvAnodeCable);
+
+        registerClickable(tht28Group, 'tht28');
+
+        // B. 10 × 1 MOhm Safety Ballast Resistor Chain inside Clear Acrylic Tube
+        const ballastGroup = new THREE.Group();
+        ballastGroup.position.set(1.15, 0.85, 0.15);
+        powerBenchGroup.add(ballastGroup);
+
+        for (let zP of [-0.65, 0.65]) {
+            const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.85, 16), MAT.acrylic);
+            post.position.set(0, -0.425, zP);
+            ballastGroup.add(post);
+        }
+
+        const acrylicTube = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 1.55, 24, 1, true), MAT.acrylic);
+        acrylicTube.rotation.x = Math.PI / 2;
+        ballastGroup.add(acrylicTube);
+
+        for (let r = 0; r < 10; r++) {
+            const res = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.1, 16), MAT.resistorOrange);
+            res.position.set(0, 0, -0.63 + r * 0.14);
+            res.rotation.x = Math.PI / 2;
+            ballastGroup.add(res);
+        }
+
+        registerClickable(ballastGroup, 'ballast');
+
+        // C. ESP32 PID Controller + 3-Way High-Voltage Sector Distributor (Secteurs A, B, C)
+        const espControlGroup = new THREE.Group();
+        espControlGroup.position.set(1.95, 0, 1.55);
+        powerBenchGroup.add(espControlGroup);
+
+        const mainControlBoard = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.08, 1.35), MAT.pcbDark);
+        mainControlBoard.position.set(0, 0.06, 0);
+        espControlGroup.add(mainControlBoard);
+
+        const esp32Mod = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.08, 0.5), MAT.plaBlack);
+        esp32Mod.position.set(0.32, 0.14, -0.2);
+        espControlGroup.add(esp32Mod);
+
+        const espCan = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.06, 0.4), MAT.aluBrushed);
+        espCan.position.set(0.25, 0.19, -0.2);
+        espControlGroup.add(espCan);
+
+        // 3 Glowing Sector Indicator LEDs on the 3-Way Distributor (Secteur A, B, C)
+        const sectorLeds = [];
+        const ledColors = [0x38bdf8, 0xa855f7, 0x10b981];
+        for (let sIdx = 0; sIdx < 3; sIdx++) {
+            const lMat = new THREE.MeshBasicMaterial({ color: ledColors[sIdx] });
+            const lMesh = new THREE.Mesh(new THREE.SphereGeometry(0.045, 14, 14), lMat);
+            lMesh.position.set(-0.55, 0.16, -0.35 + sIdx * 0.35);
+            espControlGroup.add(lMesh);
+            sectorLeds.push(lMesh);
+        }
+
+        registerClickable(espControlGroup, 'esp32');
+
+        // Dynamic Ultra-Fine Copper Tether Bundle connecting Ballast/Distributor to the Flying Rocket
+        const tetherGeo = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(1.15, 0.85, 0.88),
+            new THREE.Vector3(-0.1, 1.1, 0.4),
+            new THREE.Vector3(towerX, 2.38, 0)
+        ]);
+        const tetherLine = new THREE.Line(
+            tetherGeo,
+            new THREE.LineBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.82 })
+        );
+        scene.add(tetherLine);
+
+        // ============================================================================
+        // 8. 3-SECTOR IONIC WIND PARTICLE JETS (A, B, C)
+        // ============================================================================
+        const PARTICLE_COUNT = 1350; // 450 particles per sector (A, B, C)
+        const pPositions = new Float32Array(PARTICLE_COUNT * 3);
+        const pColors = new Float32Array(PARTICLE_COUNT * 3);
+        const pPhases = new Float32Array(PARTICLE_COUNT);
+
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+            pPhases[i] = Math.random();
+            const c1 = new THREE.Color(0xc084fc);
+            const c2 = new THREE.Color(0x38bdf8);
+            const mixed = c1.lerp(c2, pPhases[i]);
+            pColors[i * 3] = mixed.r;
+            pColors[i * 3 + 1] = mixed.g;
+            pColors[i * 3 + 2] = mixed.b;
+        }
+
+        const pGeo = new THREE.BufferGeometry();
+        pGeo.setAttribute('position', new THREE.BufferAttribute(pPositions, 3));
+        pGeo.setAttribute('color', new THREE.BufferAttribute(pColors, 3));
+
+        const pCanvas = document.createElement('canvas');
+        pCanvas.width = 64; pCanvas.height = 64;
+        const pCtx = pCanvas.getContext('2d');
+        const pGrad = pCtx.createRadialGradient(32, 32, 2, 32, 32, 30);
+        pGrad.addColorStop(0, 'rgba(255,255,255,1)');
+        pGrad.addColorStop(0.4, 'rgba(192,132,252,0.85)');
+        pGrad.addColorStop(1, 'rgba(56,189,248,0)');
+        pCtx.fillStyle = pGrad;
+        pCtx.fillRect(0, 0, 64, 64);
+
+        const particleSystem = new THREE.Points(
+            pGeo,
+            new THREE.PointsMaterial({
+                size: 0.1,
+                map: new THREE.CanvasTexture(pCanvas),
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.85,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            })
+        );
+        scene.add(particleSystem);
+
+        // ============================================================================
+        // 9. CLOSED-LOOP PID ALTITUDE & 3-SECTOR ATTITUDE PHYSICS ENGINE
+        // ============================================================================
+        function stepPhysicsAndControl(dt, elapsed) {
+            // 1. Optional Autonomous Demo Sequence
+            if (sim.autoDemo) {
+                sim.autoDemoTimer += dt;
+                const phase = sim.autoDemoTimer % 16.0;
+                if (phase < 4.0) {
+                    setTargetAltitude(24.0, true);
+                } else if (phase >= 4.0 && phase < 4.2 && sim.pushTimer <= 0) {
+                    triggerPushPerturbation();
+                } else if (phase >= 8.5 && phase < 8.7 && sim.windTimer <= 0) {
+                    triggerTiltPerturbation();
+                } else if (phase >= 12.5) {
+                    setTargetAltitude(15.0, true);
+                }
+            }
+
+            // 2. Active Perturbation Timers ("Baguette du Jury" & "Rafale Latérale")
+            if (sim.pushTimer > 0) {
+                sim.pushTimer -= dt;
+                juryRodGroup.visible = true;
+                juryRodGroup.position.set(towerX, rocketRootGroup.position.y + 2.35, 0);
+                if (sim.pushTimer <= 0) {
+                    sim.pushForceCmS2 = 0.0;
+                    juryRodGroup.visible = false;
+                    hidePerturbationBanner();
+                }
+            }
+
+            if (sim.windTimer > 0) {
+                sim.windTimer -= dt;
+                if (sim.windTimer <= 0) {
+                    sim.windTorqueDegS2 = 0.0;
+                    hidePerturbationBanner();
+                }
+            }
+
+            // 3. Closed-Loop Altitude PID Controller (HC-SR04 -> ESP32 -> 28 kV THT)
+            const altError = sim.zRefCm - sim.zActualCm;
+
+            if (sim.pidEnabled) {
+                // Hover feedforward voltage for 3.20 g rocket is 23.4 kV
+                const vFeedForward = sim.zRefCm > 0.2 ? 23.4 : 0.0;
+                sim.integralError = Math.max(-8.0, Math.min(8.0, sim.integralError + altError * dt));
+                const derivative = (altError - sim.prevError) / Math.max(0.001, dt);
+                sim.prevError = altError;
+
+                const kp = 0.65, ki = 0.35, kd = 0.32;
+                let vPid = vFeedForward + kp * altError + ki * sim.integralError - kd * sim.zVelocityCmS * 0.15;
+
+                if (sim.zRefCm <= 0.1 && sim.zActualCm < 0.5) {
+                    vPid = 0.0;
+                }
+                sim.vCommandKv = Math.max(0.0, Math.min(sim.vMaxKv, vPid));
+                document.getElementById('slider-manual-kv').value = sim.vCommandKv.toFixed(1);
+                document.getElementById('val-manual-kv').textContent = `${sim.vCommandKv.toFixed(1)} kV`;
+            } else {
+                sim.prevError = altError;
+            }
+
+            // 4. 3-Sector Finless Attitude Stabilization (Secteurs A, B, C)
+            const targetTilt = sim.manualTiltBiasDeg;
+            const tiltError = targetTilt - sim.tiltAngleDeg;
+
+            let diffKv = 0.0;
+            if (sim.sectorStabEnabled) {
+                // PD controller on attitude: increases voltage on the lower sector to push it back up
+                diffKv = tiltError * 0.42 - sim.tiltVelocityDegS * 0.08;
+                diffKv = Math.max(-4.5, Math.min(4.5, diffKv));
+            } else {
+                diffKv = sim.manualTiltBiasDeg * 0.22;
+            }
+
+            if (sim.vCommandKv > sim.vOnsetKv) {
+                sim.vSectorA = Math.max(sim.vOnsetKv, Math.min(28.0, sim.vCommandKv - diffKv));
+                sim.vSectorB = Math.max(sim.vOnsetKv, Math.min(28.0, sim.vCommandKv + diffKv));
+                sim.vSectorC = Math.max(sim.vOnsetKv, Math.min(28.0, sim.vCommandKv + Math.abs(diffKv) * 0.15));
+            } else {
+                sim.vSectorA = sim.vCommandKv;
+                sim.vSectorB = sim.vCommandKv;
+                sim.vSectorC = sim.vCommandKv;
+            }
+
+            // 5. Townsend EHD Thrust Calculation from the 3 Sectors
+            const calcSectorThrustMn = (vKv) => {
+                if (vKv <= sim.vOnsetKv) return 0.0;
+                // Calibrated so 3 sectors at 23.4 kV produce exactly 31.39 mN (3.20 gf hover)
+                return 0.02815 * vKv * (vKv - sim.vOnsetKv);
+            };
+
+            const fA = calcSectorThrustMn(sim.vSectorA);
+            const fB = calcSectorThrustMn(sim.vSectorB);
+            const fC = calcSectorThrustMn(sim.vSectorC);
+
+            sim.thrustMn = fA + fB + fC;
+            sim.thrustGf = sim.thrustMn / 9.81;
+            sim.currentMa = sim.thrustMn * 0.0198;
+
+            // 6. Vertical Equation of Motion along the Launch Tower Guide Wires
+            const weightMn = sim.rocketMassG * 9.81; // 31.392 mN
+            const netForceMn = sim.thrustMn - weightMn;
+            const verticalAccelCmS2 = (netForceMn / sim.rocketMassG) * 18.0 - sim.zVelocityCmS * 2.6 + sim.pushForceCmS2;
+
+            sim.zVelocityCmS += verticalAccelCmS2 * dt;
+            sim.zActualCm += sim.zVelocityCmS * dt;
+
+            // Clamp between launchpad (0 cm) and gantry ceiling (37.5 cm)
+            if (sim.zActualCm <= 0.0) {
+                sim.zActualCm = 0.0;
+                if (sim.zVelocityCmS < 0) sim.zVelocityCmS = 0.0;
+            } else if (sim.zActualCm >= 37.5) {
+                sim.zActualCm = 37.5;
+                if (sim.zVelocityCmS > 0) sim.zVelocityCmS = 0.0;
+            }
+
+            // 7. Rotational Tilt Dynamics (Corrected by Sector B vs Sector A thrust differential)
+            const restoringTorque = (fB - fA) * 14.5;
+            const dampingTorque = -sim.tiltVelocityDegS * 5.2;
+            const naturalPendulum = (targetTilt - sim.tiltAngleDeg) * (sim.sectorStabEnabled ? 12.0 : 1.5);
+
+            const angularAccel = restoringTorque + dampingTorque + naturalPendulum + sim.windTorqueDegS2;
+            sim.tiltVelocityDegS += angularAccel * dt;
+            sim.tiltAngleDeg = Math.max(-18.0, Math.min(18.0, sim.tiltAngleDeg + sim.tiltVelocityDegS * dt));
+
+            // 8. Map Physics to 3D Scene Positions & Glow Intensities
+            // Scale: 0 cm = Y: 0.38 on tower; 40 cm = Y: 4.02 on tower (0.091 world units per cm)
+            const worldRocketY = 0.38 + sim.zActualCm * 0.091 + (sim.zActualCm > 0.5 ? Math.sin(elapsed * 4.5) * 0.012 : 0);
+            rocketRootGroup.position.y = worldRocketY;
+            rocketPlasmaLight.position.y = worldRocketY + 1.0;
+
+            // Update laser target marker on the graduated ruler
+            setpointMarkerGroup.position.y = 0.38 + sim.zRefCm * 0.091;
+
+            // Apply tilt angle to rocketTiltGroup
+            rocketTiltGroup.rotation.z = THREE.MathUtils.degToRad(-sim.tiltAngleDeg);
+
+            // Update dynamic HV copper tether curve
+            tetherGeo.setFromPoints([
+                new THREE.Vector3(1.15, 0.85, 0.88),
+                new THREE.Vector3(-0.1, worldRocketY * 0.55 + 0.25, 0.38),
+                new THREE.Vector3(towerX, worldRocketY + 0.45, 0)
+            ]);
+
+            // Update per-sector Corona Plasma Halo opacity & color brightness
+            const setSectorGlow = (id, kv) => {
+                const ratio = kv > sim.vOnsetKv ? Math.min(1.0, (kv - sim.vOnsetKv) / (28.0 - sim.vOnsetKv)) : 0.0;
+                sectorGlowMeshes[id].forEach(m => {
+                    m.material.opacity = ratio * 0.92;
+                    m.scale.setScalar(0.95 + ratio * 0.35);
+                });
+            };
+            setSectorGlow('A', sim.vSectorA);
+            setSectorGlow('B', sim.vSectorB);
+            setSectorGlow('C', sim.vSectorC);
+
+            rocketPlasmaLight.intensity = (sim.vCommandKv > sim.vOnsetKv)
+                ? ((sim.vCommandKv - sim.vOnsetKv) / 20.0) * 2.4
+                : 0.0;
+        }
+
+        // ============================================================================
+        // 10. UI SYNCHRONIZATION & REAL-TIME PID OSCILLOSCOPE
+        // ============================================================================
+        let uiTick = 0;
+        const oscCanvas = document.getElementById('canvas-oscilloscope');
+        const oscCtx = oscCanvas.getContext('2d');
+
+        function updateTelemetryAndOscilloscope() {
+            const errCm = sim.zRefCm - sim.zActualCm;
+            const echoUs = Math.round((sim.zActualCm * 2) / 0.0343); // Speed of sound 343 m/s
+            const pwmPct = Math.round((sim.vCommandKv / sim.vMaxKv) * 100);
+            const twRatio = (sim.thrustGf / sim.rocketMassG).toFixed(2);
+
+            document.getElementById('kpi-altitude').textContent = `${sim.zActualCm.toFixed(1)} cm`;
+            document.getElementById('kpi-alt-error').textContent = `(Err: ${errCm >= 0 ? '+' : ''}${errCm.toFixed(1)}cm)`;
+            document.getElementById('kpi-echo-us').textContent = `${echoUs} µs`;
+
+            document.getElementById('kpi-voltage').textContent = `${sim.vCommandKv.toFixed(1)} kV`;
+            document.getElementById('kpi-pwm').textContent = `PWM: ${pwmPct}%`;
+            document.getElementById('kpi-current').textContent = `${sim.currentMa.toFixed(2)} mA`;
+
+            document.getElementById('kpi-thrust-mn').textContent = `${sim.thrustMn.toFixed(1)} mN`;
+            document.getElementById('kpi-thrust-gf').textContent = `(${sim.thrustGf.toFixed(2)} gf)`;
+            document.getElementById('kpi-tw-ratio').textContent = `Masse Fusée : 3.20 g (T/W=${twRatio})`;
+
+            document.getElementById('kpi-tilt-angle').textContent = `${sim.tiltAngleDeg >= 0 ? '+' : ''}${sim.tiltAngleDeg.toFixed(1)}°`;
+            document.getElementById('kpi-sector-state').textContent = Math.abs(sim.vSectorB - sim.vSectorA) > 0.3
+                ? `Correction Active (ΔV=${Math.abs(sim.vSectorB - sim.vSectorA).toFixed(1)}kV)`
+                : `3 Secteurs Équilibrés`;
+
+            // 3-Sector voltage bars
+            document.getElementById('val-kv-a').textContent = `${sim.vSectorA.toFixed(1)} kV`;
+            document.getElementById('val-kv-b').textContent = `${sim.vSectorB.toFixed(1)} kV`;
+            document.getElementById('val-kv-c').textContent = `${sim.vSectorC.toFixed(1)} kV`;
+            document.getElementById('bar-kv-a').style.width = `${(sim.vSectorA / 28.0) * 100}%`;
+            document.getElementById('bar-kv-b').style.width = `${(sim.vSectorB / 28.0) * 100}%`;
+            document.getElementById('bar-kv-c').style.width = `${(sim.vSectorC / 28.0) * 100}%`;
+
+            // Flight Mode Status Badge
+            const badge = document.getElementById('badge-flight-mode');
+            if (Math.abs(errCm) < 0.6 && Math.abs(sim.tiltAngleDeg - sim.manualTiltBiasDeg) < 0.8) {
+                badge.textContent = `VERROUILLÉ À ${sim.zActualCm.toFixed(1)} CM`;
+                badge.className = "text-[10px] font-mono-tech px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 font-bold";
+            } else {
+                badge.textContent = `CORRECTION PID EN COURS`;
+                badge.className = "text-[10px] font-mono-tech px-2 py-0.5 rounded bg-amber-500/25 text-amber-300 border border-amber-400/50 font-bold animate-pulse";
+            }
+
+            // Push sample to Oscilloscope history
+            sim.histZRef.push(sim.zRefCm); sim.histZRef.shift();
+            sim.histZAct.push(sim.zActualCm); sim.histZAct.shift();
+            sim.histKv.push(sim.vCommandKv); sim.histKv.shift();
+
+            drawOscilloscope();
+        }
+
+        function drawOscilloscope() {
+            const w = oscCanvas.width;
+            const h = oscCanvas.height;
+            oscCtx.clearRect(0, 0, w, h);
+
+            // Background Grid
+            oscCtx.strokeStyle = 'rgba(148, 163, 184, 0.14)';
+            oscCtx.lineWidth = 1;
+            for (let i = 1; i <= 3; i++) {
+                const y = (h * i) / 4;
+                oscCtx.beginPath(); oscCtx.moveTo(0, y); oscCtx.lineTo(w, y); oscCtx.stroke();
+            }
+
+            const n = sim.histZAct.length;
+
+            // 1. Target Altitude Z_ref (Dashed Amber Line, 0 to 40 cm scale)
+            oscCtx.strokeStyle = '#fbbf24';
+            oscCtx.lineWidth = 1.6;
+            oscCtx.setLineDash([4, 4]);
+            oscCtx.beginPath();
+            for (let i = 0; i < n; i++) {
+                const x = (i / (n - 1)) * w;
+                const y = h - 8 - (sim.histZRef[i] / 40.0) * (h - 16);
+                if (i === 0) oscCtx.moveTo(x, y); else oscCtx.lineTo(x, y);
+            }
+            oscCtx.stroke();
+            oscCtx.setLineDash([]);
+
+            // 2. High Voltage V_THT (Sky Blue Line, 0 to 30 kV scale)
+            oscCtx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
+            oscCtx.lineWidth = 1.8;
+            oscCtx.beginPath();
+            for (let i = 0; i < n; i++) {
+                const x = (i / (n - 1)) * w;
+                const y = h - 8 - (sim.histKv[i] / 30.0) * (h - 16);
+                if (i === 0) oscCtx.moveTo(x, y); else oscCtx.lineTo(x, y);
+            }
+            oscCtx.stroke();
+
+            // 3. Actual Measured Altitude Z(t) from HC-SR04 (Solid Emerald Line)
+            oscCtx.strokeStyle = '#10b981';
+            oscCtx.lineWidth = 2.4;
+            oscCtx.beginPath();
+            for (let i = 0; i < n; i++) {
+                const x = (i / (n - 1)) * w;
+                const y = h - 8 - (sim.histZAct[i] / 40.0) * (h - 16);
+                if (i === 0) oscCtx.moveTo(x, y); else oscCtx.lineTo(x, y);
+            }
+            oscCtx.stroke();
+        }
+
+        // ============================================================================
+        // 11. INTERACTIVE HANDLERS ("TESTS DU JURY", SETPOINTS & EXPLODED VIEW)
+        // ============================================================================
+        function setTargetAltitude(cm, fromAuto = false) {
+            if (!fromAuto && sim.autoDemo) toggleAutoDemo();
+            sim.zRefCm = cm;
+            document.getElementById('slider-zref').value = cm;
+            document.getElementById('val-zref').textContent = `${cm.toFixed(1)} cm`;
+        }
+
+        function onSetpointChange() {
+            if (sim.autoDemo) toggleAutoDemo();
+            sim.zRefCm = parseFloat(document.getElementById('slider-zref').value);
+            document.getElementById('val-zref').textContent = `${sim.zRefCm.toFixed(1)} cm`;
+        }
+
+        function togglePIDLoop() {
+            sim.pidEnabled = !sim.pidEnabled;
+            const btn = document.getElementById('btn-pid-toggle');
+            const knob = document.getElementById('knob-pid-toggle');
+            const manBox = document.getElementById('manual-voltage-box');
+
+            if (sim.pidEnabled) {
+                btn.className = "w-11 h-6 rounded-full bg-emerald-500 p-0.5 transition-colors relative flex items-center";
+                knob.className = "w-5 h-5 rounded-full bg-white shadow-md transform translate-x-5 transition-transform";
+                manBox.className = "opacity-50 pointer-events-none transition-opacity pt-1 border-t border-slate-800/80";
+            } else {
+                btn.className = "w-11 h-6 rounded-full bg-slate-700 p-0.5 transition-colors relative flex items-center";
+                knob.className = "w-5 h-5 rounded-full bg-slate-300 shadow-md transform translate-x-0 transition-transform";
+                manBox.className = "opacity-100 pointer-events-auto transition-opacity pt-1 border-t border-slate-800/80";
+            }
+        }
+
+        function onManualKvChange() {
+            if (!sim.pidEnabled) {
+                sim.vCommandKv = parseFloat(document.getElementById('slider-manual-kv').value);
+                document.getElementById('val-manual-kv').textContent = `${sim.vCommandKv.toFixed(1)} kV`;
+            }
+        }
+
+        function toggleSectorStabilization() {
+            sim.sectorStabEnabled = !sim.sectorStabEnabled;
+            const btn = document.getElementById('btn-sector-toggle');
+            const knob = document.getElementById('knob-sector-toggle');
+            if (sim.sectorStabEnabled) {
+                btn.className = "w-11 h-6 rounded-full bg-purple-600 p-0.5 transition-colors relative flex items-center";
+                knob.className = "w-5 h-5 rounded-full bg-white shadow-md transform translate-x-5 transition-transform";
+            } else {
+                btn.className = "w-11 h-6 rounded-full bg-slate-700 p-0.5 transition-colors relative flex items-center";
+                knob.className = "w-5 h-5 rounded-full bg-slate-300 shadow-md transform translate-x-0 transition-transform";
+            }
+        }
+
+        function onManualTiltChange() {
+            sim.manualTiltBiasDeg = parseFloat(document.getElementById('slider-manual-tilt').value);
+            document.getElementById('val-manual-tilt').textContent = `${sim.manualTiltBiasDeg > 0 ? '+' : ''}${sim.manualTiltBiasDeg.toFixed(1)}°`;
+        }
+
+        function triggerPushPerturbation() {
+            if (sim.zActualCm < 5.0) setTargetAltitude(22.0, true);
+            sim.pushForceCmS2 = -135.0; // Strong downward push with insulating rod
+            sim.pushTimer = 1.15;
+
+            const banner = document.getElementById('perturbation-banner');
+            document.getElementById('perturbation-title').textContent = "TEST DU JURY : POUSSÉE VERS LE BAS AVEC BAGUETTE (-10 CM)";
+            document.getElementById('perturbation-sub').textContent = "Le capteur HC-SR04 détecte la baisse d'altitude → L'ESP32 pousse le gros THT à 27,8 kV pour remonter !";
+            banner.classList.remove('hidden');
+        }
+
+        function triggerTiltPerturbation() {
+            sim.windTorqueDegS2 = 195.0; // Sharp lateral gust tilting the rocket
+            sim.windTimer = 0.85;
+
+            const banner = document.getElementById('perturbation-banner');
+            document.getElementById('perturbation-title').textContent = "RAFALE LATÉRALE (+12° TILT) — STABILISATION 3 SECTEURS ACTIVE";
+            document.getElementById('perturbation-sub').textContent = "Survoltage automatique du Secteur B (jusqu'à 27,5 kV) pour redresser la fusée sans ailerons.";
+            banner.classList.remove('hidden');
+        }
+
+        function hidePerturbationBanner() {
+            if (sim.pushTimer <= 0 && sim.windTimer <= 0) {
+                document.getElementById('perturbation-banner').classList.add('hidden');
+            }
+        }
+
+        function toggleAutoDemo() {
+            sim.autoDemo = !sim.autoDemo;
+            sim.autoDemoTimer = 0.0;
+            const btn = document.getElementById('btn-auto-demo');
+            if (sim.autoDemo) {
+                if (!sim.pidEnabled) togglePIDLoop();
+                if (!sim.sectorStabEnabled) toggleSectorStabilization();
+                btn.className = "px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-emerald-500 text-slate-950 border border-emerald-300 transition shadow-lg shadow-emerald-500/30";
+                btn.innerHTML = `<i class="fas fa-stop"></i><span>Arrêter Démo</span>`;
+            } else {
+                btn.className = "px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-200 border border-emerald-400/50 transition";
+                btn.innerHTML = `<i class="fas fa-play"></i><span>Démo Automatique</span>`;
+            }
+        }
+
+        function updateExplodedView() {
+            const val = parseFloat(document.getElementById('slider-exploded').value);
+            sim.explodedFactor = val / 100.0;
+            document.getElementById('val-exploded').textContent = `${val} %`;
+            const e = sim.explodedFactor;
+
+            // Vertically separate Nosecone, Upper Stage 1 and Lower Stage 2
+            noseConeGroup.position.y = e * 0.75;
+            upperStageGroup.position.y = e * 0.25;
+            lowerStageGroup.position.y = -e * 0.35;
+
+            // Radially expand the 3 Aluminum Collector Sectors (A, B, C) to showcase the 3-sector architecture
+            sectorSkirtMeshes.forEach(({ mesh, centerAngle }) => {
+                const radOut = e * 0.28;
+                mesh.position.x = Math.cos(centerAngle) * radOut;
+                mesh.position.z = Math.sin(centerAngle) * radOut;
+            });
+        }
+
+        function toggleSonarWaves() {
+            sim.showSonar = !sim.showSonar;
+            sonarWavesGroup.visible = sim.showSonar;
+            const btn = document.getElementById('btn-sonar-waves');
+            btn.className = sim.showSonar
+                ? "px-2 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition"
+                : "px-2 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition";
+        }
+
+        function toggle3DLabels() {
+            sim.showLabels = !sim.showLabels;
+            const btn = document.getElementById('btn-3d-labels');
+            btn.className = sim.showLabels
+                ? "px-2 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-400/40 text-indigo-300 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition"
+                : "px-2 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition";
+        }
+
+        // Camera Smooth Transitions & Subsystem Inspector
+        let camTween = null;
+        function animateCam(pos, target) {
+            camTween = {
+                sPos: camera.position.clone(),
+                ePos: new THREE.Vector3(pos.x, pos.y, pos.z),
+                sTar: controls.target.clone(),
+                eTar: new THREE.Vector3(target.x, target.y, target.z),
+                t: 0
+            };
+        }
+
+        function setCamView(view) {
+            if (view === 'overview') animateCam({ x: 0.2, y: 3.8, z: 9.2 }, { x: -0.2, y: 2.0, z: 0 });
+            if (view === 'rocket') selectSubsystem('sectors');
+            if (view === 'sensor') selectSubsystem('hcsr04');
+            if (view === 'tht') selectSubsystem('tht28');
+        }
+
+        function selectSubsystem(subKey) {
+            const info = SUBSYSTEM_DB[subKey];
+            if (!info) return;
+
+            document.getElementById('insp-category').textContent = info.category;
+            document.getElementById('insp-title').textContent = info.title;
+            document.getElementById('insp-tag').textContent = info.tag;
+            document.getElementById('insp-spec').textContent = info.spec;
+            document.getElementById('insp-benefit').textContent = info.benefit;
+            document.getElementById('insp-desc').textContent = info.desc;
+
+            document.querySelectorAll('.sub-chip').forEach(btn => {
+                btn.className = "sub-chip px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800/80 text-slate-300 hover:bg-slate-700 border border-slate-700 shrink-0 transition";
+            });
+            const activeBtn = document.getElementById(`chip-${subKey}`);
+            if (activeBtn) {
+                activeBtn.className = "sub-chip px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-500/25 text-sky-200 border border-sky-400/50 shrink-0 transition";
+            }
+
+            const lookY = (subKey === 'rocket' || subKey === 'sectors') ? rocketRootGroup.position.y + 0.9 : info.lookAt.y;
+            animateCam(
+                { x: info.camPos.x, y: (subKey === 'rocket' || subKey === 'sectors') ? lookY + 0.7 : info.camPos.y, z: info.camPos.z },
+                { x: info.lookAt.x, y: lookY, z: info.lookAt.z }
+            );
+        }
+
+        // 3D Floating Annotations
+        const labelsContainer = document.getElementById('labels-container');
+        const labelDefs = [
+            { key: 'rocket', text: 'Étage 1 & 2 (Turbo Ionique 3.20g)', offset: new THREE.Vector3(0, 2.0, 0), followRocket: true },
+            { key: 'sectors', text: '3 Secteurs Alu (A, B, C Sans Ailerons)', offset: new THREE.Vector3(0.85, 0.5, 0.4), followRocket: true },
+            { key: 'hcsr04', text: 'Capteur Ultrason HC-SR04 (Altitude Z)', offset: new THREE.Vector3(towerX, 0.48, 0.5), followRocket: false },
+            { key: 'tht28', text: 'Gros THT TV Couleur (28 kV DC)', offset: new THREE.Vector3(2.15, 2.05, -0.45), followRocket: false },
+            { key: 'ballast', text: 'Chaîne Sécurité 10× 1 MΩ', offset: new THREE.Vector3(1.15, 1.25, 0.15), followRocket: false },
+            { key: 'esp32', text: 'ESP32 PID + Répartiteur 3 Voies', offset: new THREE.Vector3(1.95, 0.55, 1.55), followRocket: false }
+        ];
+
+        const labelEls = [];
+        labelDefs.forEach(d => {
+            const el = document.createElement('div');
+            el.className = 'label-3d px-2.5 py-1 rounded-full text-[11px] font-semibold glass-panel text-sky-200 border border-sky-400/40 flex items-center gap-1.5 shadow-lg';
+            el.innerHTML = `<span class="w-2 h-2 rounded-full bg-sky-400"></span><span>${d.text}</span>`;
+            el.onclick = () => selectSubsystem(d.key);
+            labelsContainer.appendChild(el);
+            labelEls.push({ el, d });
+        });
+
+        function update3DLabels() {
+            if (!sim.showLabels) {
+                labelEls.forEach(({ el }) => el.style.display = 'none');
+                return;
+            }
+            labelEls.forEach(({ el, d }) => {
+                const pos = d.offset.clone();
+                if (d.followRocket) {
+                    pos.x += rocketRootGroup.position.x;
+                    pos.y += rocketRootGroup.position.y;
+                    pos.z += rocketRootGroup.position.z;
+                }
+                pos.project(camera);
+                if (pos.z > 1) {
+                    el.style.display = 'none';
+                    return;
+                }
+                el.style.display = 'flex';
+                el.style.left = `${(pos.x * 0.5 + 0.5) * window.innerWidth}px`;
+                el.style.top = `${(-(pos.y * 0.5) + 0.5) * window.innerHeight}px`;
+            });
+        }
+
+        // Raycaster for direct 3D clicks
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let downPt = { x: 0, y: 0 };
+        renderer.domElement.addEventListener('pointerdown', e => { downPt = { x: e.clientX, y: e.clientY }; });
+        renderer.domElement.addEventListener('pointerup', e => {
+            if (Math.hypot(e.clientX - downPt.x, e.clientY - downPt.y) > 6) return;
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects(clickableMeshes, false);
+            if (hits.length > 0 && hits[0].object.userData.subKey) {
+                selectSubsystem(hits[0].object.userData.subKey);
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // ============================================================================
+        // 12. MAIN 60 FPS RENDER & MULTIPHYSICS ANIMATION LOOP
+        // ============================================================================
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = Math.min(clock.getDelta(), 0.05);
+            const elapsed = clock.getElapsedTime();
+
+            // 1. Camera Tweening
+            if (camTween) {
+                camTween.t += dt * 2.4;
+                const p = Math.min(1.0, camTween.t);
+                const ease = 1 - Math.pow(1 - p, 3);
+                camera.position.lerpVectors(camTween.sPos, camTween.ePos, ease);
+                controls.target.lerpVectors(camTween.sTar, camTween.eTar, ease);
+                if (p >= 1.0) camTween = null;
+            }
+            controls.update();
+
+            // 2. Step Closed-Loop PID & 3-Sector Attitude Physics
+            stepPhysicsAndControl(dt, elapsed);
+
+            // 3. Animate HC-SR04 Ultrasonic Acoustic Wave Rings (Upward Ping & Downward Echo)
+            if (sim.showSonar) {
+                const rocketBottomY = Math.max(0.42, rocketRootGroup.position.y);
+                sonarRings.forEach(sr => {
+                    sr.phase = (sr.phase + dt * 1.15) % 1.0;
+                    const p = sr.phase;
+                    if (!sr.isEcho) {
+                        // Rising ultrasonic ping from HC-SR04 (Y=0.28) to Rocket bottom
+                        sr.mesh.position.y = THREE.MathUtils.lerp(0.28, rocketBottomY, p);
+                        sr.mesh.scale.setScalar(0.6 + p * 1.6);
+                        sr.mesh.material.opacity = (1.0 - p) * 0.65;
+                    } else {
+                        // Reflected echo travelling back down from Rocket bottom to HC-SR04
+                        sr.mesh.position.y = THREE.MathUtils.lerp(rocketBottomY, 0.28, p);
+                        sr.mesh.scale.setScalar(1.8 - p * 1.1);
+                        sr.mesh.material.opacity = (1.0 - p) * 0.55;
+                    }
+                });
+            }
+
+            // 4. Animate 3-Sector Ionic Wind Particles (Velocity & Density proportional to each Sector's kV)
+            const posAttr = pGeo.attributes.position;
+            const activeThrust = sim.thrustMn > 1.0;
+            particleSystem.visible = activeThrust;
+
+            if (activeThrust) {
+                const tiltRad = THREE.MathUtils.degToRad(sim.tiltAngleDeg);
+                const sectorKvList = [sim.vSectorA, sim.vSectorB, sim.vSectorC];
+
+                for (let i = 0; i < PARTICLE_COUNT; i++) {
+                    const secIdx = i % 3; // 0 = Sector A, 1 = Sector B, 2 = Sector C
+                    const secKv = sectorKvList[secIdx];
+                    const speedMult = Math.max(0.2, (secKv - sim.vOnsetKv) / 14.0);
+
+                    pPhases[i] += dt * speedMult * (1.2 + (i % 5) * 0.15);
+                    if (pPhases[i] > 1.0) pPhases[i] -= 1.0;
+
+                    const prog = pPhases[i];
+                    const secConf = sectorAngles[secIdx];
+                    const localAngle = secConf.startAngle + ((i * 0.618034) % 1.0) * arcSpan;
+                    const r = 0.65 + (i % 4) * 0.03;
+
+                    const yStart = rocketRootGroup.position.y + (i % 2 === 0 ? 1.55 : 0.78);
+                    const dropDist = prog * (1.1 + speedMult * 0.9);
+                    const y = Math.max(0.14, yStart - dropDist);
+
+                    const xLocal = Math.cos(localAngle) * r + Math.sin(tiltRad) * dropDist;
+                    const zLocal = Math.sin(localAngle) * r;
+
+                    posAttr.array[i * 3] = towerX + xLocal;
+                    posAttr.array[i * 3 + 1] = y;
+                    posAttr.array[i * 3 + 2] = zLocal;
+                }
+                posAttr.needsUpdate = true;
+            }
+
+            // 5. Update UI & Oscilloscope at ~20 Hz
+            uiTick++;
+            if (uiTick % 3 === 0) {
+                updateTelemetryAndOscilloscope();
+            }
+
+            // 6. Project 3D Floating Labels
+            update3DLabels();
+
+            renderer.render(scene, camera);
+        }
+
+        window.onload = () => {
+            updateTelemetryAndOscilloscope();
+            animate();
+        };
+    </script>
+</body>
+</html>
