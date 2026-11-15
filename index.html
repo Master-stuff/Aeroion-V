@@ -106,6 +106,345 @@
         .perturbation-banner {
             animation: pulseAlert 0.5s infinite;
         }
+
+
+        /* ================================================================
+           ADAPTATION ÉCRAN : PC / TABLETTE / TÉLÉPHONE
+           Les panneaux deviennent des tiroirs sur les écrans compacts.
+           ================================================================ */
+        html, body {
+            width: 100%;
+            height: 100%;
+            min-height: 100%;
+        }
+        body {
+            min-width: 320px;
+            min-height: 100vh;
+            min-height: 100dvh;
+        }
+        #canvas-container, #labels-container {
+            width: 100%;
+            height: 100%;
+        }
+        #canvas-container canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+        .label-3d {
+            width: max-content;
+            max-width: min(250px, 24vw);
+            white-space: normal;
+            overflow-wrap: anywhere;
+            text-align: left;
+            font-size: clamp(9px, .75vw, 11px);
+            line-height: 1.3;
+            padding: 5px 9px;
+            background: rgba(5, 12, 25, .94);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .label-3d > span:last-child {
+            display: block;
+            min-width: 0;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+        }
+        sub, sup {
+            font-size: .72em;
+            line-height: 0;
+            position: relative;
+            vertical-align: baseline;
+        }
+        sub { bottom: -.28em; }
+        sup { top: -.48em; }
+        #perturbation-banner {
+            max-width: min(92vw, 680px);
+        }
+        #responsive-toolbar {
+            display: none;
+        }
+
+        /* Petits ordinateurs et tablettes en paysage */
+        @media (min-width: 901px) and (max-width: 1250px) {
+            aside:first-of-type {
+                width: clamp(250px, 25vw, 300px) !important;
+            }
+            aside:nth-of-type(2) {
+                width: clamp(260px, 28vw, 330px) !important;
+            }
+            aside > .glass-panel {
+                padding: 11px;
+            }
+            .label-3d {
+                max-width: 190px;
+                font-size: 9px;
+            }
+            header > div:first-child {
+                max-width: 48vw;
+            }
+            header > div:first-child > div > div > span:first-child {
+                font-size: 12px;
+            }
+            footer > div {
+                max-width: 85vw;
+            }
+        }
+
+        /* Tablettes et téléphones : affichage du modèle en priorité.
+           Les deux grands panneaux sont ouverts à la demande avec la barre. */
+        @media (max-width: 900px) {
+            header {
+                top: max(7px, env(safe-area-inset-top)) !important;
+                left: 8px !important;
+                right: 8px !important;
+                justify-content: center !important;
+                gap: 6px !important;
+            }
+            header > div:first-child {
+                width: 100%;
+                max-width: 100%;
+                padding: 7px 10px !important;
+                gap: 8px !important;
+                justify-content: flex-start;
+            }
+            header > div:first-child .w-10 {
+                width: 34px !important;
+                height: 34px !important;
+                flex: 0 0 34px;
+            }
+            header > div:nth-child(2),
+            header > div:nth-child(3) {
+                display: none !important;
+            }
+            header > div:first-child > div > div > span:first-child {
+                font-size: 12px !important;
+                line-height: 1.2;
+            }
+            header > div:first-child > div > div > span:nth-child(2) {
+                font-size: 8px !important;
+                padding: 2px 5px !important;
+            }
+
+            aside {
+                display: none !important;
+                position: fixed !important;
+                top: auto !important;
+                left: 8px !important;
+                right: 8px !important;
+                bottom: calc(108px + env(safe-area-inset-bottom)) !important;
+                width: auto !important;
+                max-width: none !important;
+                height: auto !important;
+                max-height: 48dvh;
+                z-index: 45 !important;
+                pointer-events: auto !important;
+            }
+            aside.mobile-panel-open {
+                display: flex !important;
+            }
+            aside > .glass-panel {
+                width: 100%;
+                max-height: 48dvh;
+                padding: 11px !important;
+                border-radius: 16px;
+                overflow-y: auto;
+                overscroll-behavior: contain;
+                -webkit-overflow-scrolling: touch;
+                background: rgba(5, 10, 22, .96);
+            }
+            #responsive-toolbar {
+                display: flex;
+                position: fixed;
+                z-index: 50;
+                left: 8px;
+                right: 8px;
+                bottom: calc(58px + env(safe-area-inset-bottom));
+                gap: 6px;
+                align-items: center;
+                overflow-x: auto;
+                overscroll-behavior-x: contain;
+                scrollbar-width: none;
+                padding: 6px;
+                border-radius: 13px;
+                background: rgba(5, 12, 25, .94);
+                border: 1px solid rgba(56, 189, 248, .25);
+                box-shadow: 0 8px 25px rgba(0,0,0,.42);
+                backdrop-filter: blur(14px);
+                -webkit-backdrop-filter: blur(14px);
+                pointer-events: auto;
+            }
+            #responsive-toolbar::-webkit-scrollbar { display: none; }
+            #responsive-toolbar button {
+                flex: 0 0 auto;
+                min-height: 36px;
+                padding: 7px 10px;
+                border-radius: 9px;
+                border: 1px solid rgba(100, 116, 139, .5);
+                background: rgba(30, 41, 59, .9);
+                color: #e2e8f0;
+                font: 600 11px Inter, sans-serif;
+                white-space: nowrap;
+                touch-action: manipulation;
+            }
+            #responsive-toolbar button.active {
+                color: #bae6fd;
+                border-color: rgba(56, 189, 248, .75);
+                background: rgba(14, 116, 144, .35);
+            }
+            #responsive-toolbar .toolbar-separator {
+                flex: 0 0 1px;
+                height: 25px;
+                background: rgba(148, 163, 184, .25);
+            }
+            footer {
+                left: 8px !important;
+                right: 8px !important;
+                bottom: calc(5px + env(safe-area-inset-bottom)) !important;
+                justify-content: stretch !important;
+            }
+            footer > div {
+                width: 100%;
+                max-width: 100%;
+                padding: 5px 7px !important;
+                gap: 5px !important;
+                border-radius: 12px;
+            }
+            footer .sub-chip {
+                font-size: 10px !important;
+                padding: 6px 8px !important;
+            }
+            .label-3d {
+                max-width: 165px;
+                font-size: 9px;
+                padding: 5px 7px;
+            }
+            #perturbation-banner {
+                top: 55px !important;
+                width: calc(100vw - 20px);
+                padding: 7px 10px !important;
+                gap: 7px !important;
+                border-radius: 10px;
+            }
+            #perturbation-title {
+                font-size: 9px !important;
+                line-height: 1.25;
+            }
+            #perturbation-sub {
+                font-size: 9px !important;
+                line-height: 1.25;
+            }
+        }
+
+        /* Téléphones : dimensions tactiles confortables, texte réduit,
+           panneaux moins hauts pour laisser le modèle visible. */
+        @media (max-width: 600px) {
+            header > div:first-child > div > div > span:nth-child(2) {
+                display: none !important;
+            }
+            header > div:first-child > div > div > span:first-child {
+                font-size: 11px !important;
+                letter-spacing: .015em !important;
+            }
+            aside {
+                left: 6px !important;
+                right: 6px !important;
+                bottom: calc(101px + env(safe-area-inset-bottom)) !important;
+                max-height: 43dvh;
+            }
+            aside > .glass-panel {
+                max-height: 43dvh;
+                padding: 9px !important;
+                gap: 9px !important;
+            }
+            #responsive-toolbar {
+                left: 6px;
+                right: 6px;
+                bottom: calc(55px + env(safe-area-inset-bottom));
+                padding: 5px;
+                gap: 5px;
+            }
+            #responsive-toolbar button {
+                min-height: 36px;
+                padding: 7px 9px;
+                font-size: 10px;
+            }
+            footer {
+                left: 6px !important;
+                right: 6px !important;
+            }
+            footer > div {
+                gap: 4px !important;
+            }
+            footer .sub-chip {
+                font-size: 9px !important;
+                padding: 5px 7px !important;
+            }
+            .label-3d {
+                max-width: 138px;
+                font-size: 8.5px;
+                padding: 5px 6px;
+            }
+            #perturbation-banner {
+                top: 51px !important;
+            }
+        }
+
+        /* PC : panneaux alignés sous l'en-tête, sans recouvrir les commandes du haut. */
+        @media (min-width: 901px) {
+            aside {
+                top: var(--desktop-panel-top, 92px) !important;
+                bottom: 68px !important;
+                max-height: var(--desktop-panel-max-height, calc(100dvh - 170px)) !important;
+            }
+            aside > .glass-panel {
+                min-height: 0;
+                max-height: 100%;
+            }
+        }
+        body.focus-mode aside,
+        body.focus-mode footer {
+            display: none !important;
+        }
+        .desktop-focus-btn {
+            display: none;
+        }
+        @media (min-width: 901px) {
+            .desktop-focus-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 7px;
+                flex: 0 0 auto;
+                min-height: 34px;
+                padding: 7px 10px;
+                border-radius: 9px;
+                color: #bae6fd;
+                background: rgba(14, 116, 144, .25);
+                border: 1px solid rgba(56, 189, 248, .42);
+                font: 600 11px Inter, sans-serif;
+                white-space: nowrap;
+                cursor: pointer;
+            }
+            .desktop-focus-btn:hover {
+                background: rgba(14, 116, 144, .42);
+            }
+        }
+
+        /* Petit écran en mode paysage : donner plus de place à la scène 3D. */
+        @media (max-height: 520px) and (max-width: 900px) {
+            aside {
+                bottom: calc(88px + env(safe-area-inset-bottom)) !important;
+                max-height: 55dvh;
+            }
+            aside > .glass-panel { max-height: 55dvh; }
+            #responsive-toolbar { bottom: calc(48px + env(safe-area-inset-bottom)); }
+            footer > div { padding-top: 3px !important; padding-bottom: 3px !important; }
+            header > div:first-child { padding-top: 4px !important; padding-bottom: 4px !important; }
+        }
+
     </style>
 </head>
 <body class="relative w-screen h-screen overflow-hidden select-none">
@@ -128,7 +467,7 @@
     <!-- TOP NAVIGATION BAR -->
     <header class="absolute top-3 left-3 right-3 z-30 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
         <!-- Brand & System Title -->
-        <div class="glass-panel px-4 py-2 rounded-xl flex items-center gap-3 pointer-events-auto">
+        <div class="glass-panel px-4 py-2 rounded-xl flex items-center justify-between gap-3 pointer-events-auto">
             <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500 via-indigo-600 to-purple-700 flex items-center justify-center shadow-lg shadow-sky-500/25 border border-sky-300/30">
                 <i class="fas fa-rocket text-white text-lg"></i>
             </div>
@@ -137,8 +476,11 @@
                     <span class="font-extrabold text-sm md:text-base tracking-tight bg-gradient-to-r from-sky-300 via-cyan-200 to-purple-300 bg-clip-text text-transparent">AEROION-V • STABILISATION ROCKET</span>
                     <span class="text-[10px] font-mono-tech uppercase px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/40 font-bold">GROS THT TV 28 kV DC</span>
                 </div>
-                <p class="text-[11px] text-slate-400 hidden lg:block">Fusée EHD Bi-Étage (3,20 g), Asservissement PID Ultrasonique HC-SR04 & Guidage Vectoriel 3 Secteurs sans Ailerons</p>
+                <p class="text-[11px] text-slate-400 hidden lg:block">Fusée EHD bi-étage (3,20 g), asservissement PID ultrasonique HC-SR04 et guidage vectoriel à 3 secteurs sans ailerons</p>
             </div>
+            <button id="desktop-focus-toggle" class="desktop-focus-btn" type="button" onclick="toggleDesktopFocus()" aria-pressed="false" title="Masquer les panneaux pour dégager le modèle 3D">
+                <i class="fas fa-expand"></i><span>Vue 3D</span>
+            </button>
         </div>
 
         <!-- Quick Jury Test Perturbation Buttons -->
@@ -177,15 +519,30 @@
         </div>
     </header>
 
+    <!-- Barre compacte pour tablettes et téléphones -->
+    <nav id="responsive-toolbar" aria-label="Commandes rapides">
+        <button type="button" data-panel="controls-panel" aria-label="Afficher les commandes">☷ Commandes</button>
+        <button type="button" data-panel="telemetry-panel" aria-label="Afficher la télémétrie">◫ Données</button>
+        <span class="toolbar-separator" aria-hidden="true"></span>
+        <button type="button" data-camera="overview">Vue</button>
+        <button type="button" data-camera="rocket">Fusée</button>
+        <button type="button" data-camera="sensor">Sonar</button>
+        <button type="button" data-camera="tht">THT</button>
+        <span class="toolbar-separator" aria-hidden="true"></span>
+        <button type="button" data-action="push">↓ Poussée</button>
+        <button type="button" data-action="tilt">↗ Rafale</button>
+        <button type="button" data-action="demo">▶ Démo</button>
+    </nav>
+
     <!-- LEFT PANEL: CLOSED-LOOP PID ALTITUDE & 3-SECTOR VECTORING CONTROLS -->
-    <aside class="absolute top-20 left-3 bottom-16 w-80 md:w-84 max-w-[90vw] z-20 flex flex-col gap-2.5 pointer-events-none">
+    <aside id="controls-panel" class="absolute top-20 left-3 bottom-16 w-80 md:w-84 max-w-[90vw] z-20 flex flex-col gap-2.5 pointer-events-none">
         <div class="glass-panel rounded-2xl p-3.5 flex flex-col gap-3 overflow-y-auto pointer-events-auto max-h-full">
 
-            <!-- Target Altitude Setpoint Z_ref (0 to 36 cm) -->
+            <!-- Consigne d’altitude de référence (0 à 36 cm) -->
             <div class="bg-slate-900/90 p-3 rounded-xl border border-emerald-500/35">
                 <div class="flex justify-between items-center mb-1">
                     <label class="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
-                        <i class="fas fa-crosshairs"></i> Consigne Altitude ($Z_{\text{ref}}$)
+                        <i class="fas fa-crosshairs"></i> Consigne altitude (Z<sub>ref</sub>)
                     </label>
                     <span id="val-zref" class="font-mono-tech text-sm font-extrabold text-emerald-400">22.0 cm</span>
                 </div>
@@ -217,7 +574,7 @@
                 <!-- Manual Voltage Slider (Enabled only when PID is OFF) -->
                 <div id="manual-voltage-box" class="opacity-50 pointer-events-none transition-opacity pt-1 border-t border-slate-800/80">
                     <div class="flex justify-between text-[11px] mb-0.5">
-                        <span class="text-slate-400">Tension THT Manuelle ($V_{\text{THT}}$)</span>
+                        <span class="text-slate-400">Tension THT manuelle (V<sub>THT</sub>)</span>
                         <span id="val-manual-kv" class="font-mono-tech text-sky-300 font-bold">23.4 kV</span>
                     </div>
                     <input id="slider-manual-kv" type="range" min="0" max="28" step="0.2" value="23.4" oninput="onManualKvChange()">
@@ -226,15 +583,15 @@
                 <!-- PID Gains (Kp, Ki, Kd) -->
                 <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-800/80 text-center">
                     <div class="bg-slate-950/80 p-1.5 rounded-lg border border-slate-800">
-                        <div class="text-[9px] text-slate-400 uppercase">Gain $K_p$</div>
+                        <div class="text-[9px] text-slate-400 uppercase">Gain K<sub>p</sub></div>
                         <div class="font-mono-tech text-xs font-bold text-sky-400">1.85</div>
                     </div>
                     <div class="bg-slate-950/80 p-1.5 rounded-lg border border-slate-800">
-                        <div class="text-[9px] text-slate-400 uppercase">Intégral $K_i$</div>
+                        <div class="text-[9px] text-slate-400 uppercase">Intégral K<sub>i</sub></div>
                         <div class="font-mono-tech text-xs font-bold text-emerald-400">0.92</div>
                     </div>
                     <div class="bg-slate-950/80 p-1.5 rounded-lg border border-slate-800">
-                        <div class="text-[9px] text-slate-400 uppercase">Dérivé $K_d$</div>
+                        <div class="text-[9px] text-slate-400 uppercase">Dérivé K<sub>d</sub></div>
                         <div class="font-mono-tech text-xs font-bold text-purple-400">1.40</div>
                     </div>
                 </div>
@@ -288,7 +645,7 @@
                 <!-- Manual Tilt Bias Slider -->
                 <div class="pt-1 border-t border-slate-800/80">
                     <div class="flex justify-between text-[11px] mb-0.5">
-                        <span class="text-slate-400">Braquage Manuel ($\theta_{\text{bias}}$)</span>
+                        <span class="text-slate-400">Inclinaison manuelle (θ<sub>bias</sub>)</span>
                         <span id="val-manual-tilt" class="font-mono-tech text-purple-300 font-bold">0.0°</span>
                     </div>
                     <input id="slider-manual-tilt" type="range" class="slider-purple" min="-15" max="15" step="0.5" value="0" oninput="onManualTiltChange()">
@@ -319,7 +676,7 @@
     </aside>
 
     <!-- RIGHT PANEL: TELEMETRY, LIVE PID OSCILLOSCOPE & COMPONENT INSPECTOR -->
-    <aside class="absolute top-20 right-3 bottom-16 w-88 md:w-96 max-w-[92vw] z-20 flex flex-col gap-2.5 pointer-events-none">
+    <aside id="telemetry-panel" class="absolute top-20 right-3 bottom-16 w-88 md:w-96 max-w-[92vw] z-20 flex flex-col gap-2.5 pointer-events-none">
         <div class="glass-panel rounded-2xl p-3.5 flex flex-col gap-2.5 overflow-y-auto pointer-events-auto max-h-full">
 
             <!-- Telemetry Status Header -->
@@ -336,7 +693,7 @@
             <!-- 4 KPI Readout Cards -->
             <div class="grid grid-cols-2 gap-2">
                 <div class="bg-slate-900/85 p-2.5 rounded-xl border border-slate-800">
-                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Altitude HC-SR04 ($Z$)</div>
+                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Altitude HC-SR04 (Z)</div>
                     <div class="flex items-baseline gap-1.5 mt-0.5">
                         <span id="kpi-altitude" class="font-mono-tech text-lg font-extrabold text-emerald-400">22.0 cm</span>
                         <span id="kpi-alt-error" class="font-mono-tech text-[11px] text-slate-400">(Err: 0.0cm)</span>
@@ -345,7 +702,7 @@
                 </div>
 
                 <div class="bg-slate-900/85 p-2.5 rounded-xl border border-slate-800">
-                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Tension Gros THT ($V$)</div>
+                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Tension THT (V)</div>
                     <div class="flex items-baseline gap-1.5 mt-0.5">
                         <span id="kpi-voltage" class="font-mono-tech text-lg font-extrabold text-sky-400">23.4 kV</span>
                         <span id="kpi-pwm" class="font-mono-tech text-[11px] text-amber-300">PWM: 84%</span>
@@ -354,7 +711,7 @@
                 </div>
 
                 <div class="bg-slate-900/85 p-2.5 rounded-xl border border-slate-800">
-                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Poussée 2-Étages ($F$)</div>
+                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Poussée des 2 étages (F)</div>
                     <div class="flex items-baseline gap-1.5 mt-0.5">
                         <span id="kpi-thrust-mn" class="font-mono-tech text-base font-extrabold text-emerald-400">31.4 mN</span>
                         <span id="kpi-thrust-gf" class="font-mono-tech text-xs text-slate-300">(3.20 gf)</span>
@@ -372,15 +729,15 @@
                 </div>
             </div>
 
-            <!-- Real-Time PID Oscilloscope Canvas (Z_ref vs Z_actual & V_THT) -->
+            <!-- Real-Time PID Oscilloscope Canvas (Altitude de référence / altitude mesurée / tension THT) -->
             <div class="bg-slate-950/90 p-2.5 rounded-xl border border-slate-800/90">
                 <div class="flex justify-between items-center mb-1">
                     <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
-                        <i class="fas fa-wave-square text-emerald-400"></i> Oscilloscope PID : Altitude $Z(t)$ & Tension THT
+                        <i class="fas fa-wave-square text-emerald-400"></i> Oscilloscope PID : altitude Z(t) et tension THT
                     </span>
                     <div class="flex items-center gap-2 text-[9px] font-mono-tech">
                         <span class="text-emerald-400">— Z(cm)</span>
-                        <span class="text-amber-300">-- Z_ref</span>
+                        <span class="text-amber-300">-- Z<sub>ref</sub></span>
                         <span class="text-sky-400">— kV</span>
                     </div>
                 </div>
@@ -503,7 +860,7 @@
                 tag: "Boucle PID 100 Hz",
                 spec: "Algorithme PID + Modulation PWM 25 kHz",
                 benefit: "Pilotage Wi-Fi en direct par le jury",
-                desc: "L'ESP32 compare 100 fois par seconde l'altitude mesurée Z(t) par le capteur HC-SR04 avec la consigne Z_ref choisie. Si un membre du jury appuie sur la fusée avec une baguette, l'ESP32 augmente immédiatement la tension jusqu'à 27,8 kV pour contrer la main et ramener la fusée à sa consigne.",
+                desc: "L'ESP32 compare 100 fois par seconde l'altitude mesurée Z(t) par le capteur HC-SR04 avec la consigne d’altitude de référence choisie. Si un membre du jury appuie sur la fusée avec une baguette, l'ESP32 augmente immédiatement la tension jusqu'à 27,8 kV pour contrer la main et ramener la fusée à sa consigne.",
                 camPos: { x: 2.8, y: 1.8, z: 4.1 },
                 lookAt: { x: 2.0, y: 0.35, z: 1.55 }
             }
@@ -710,8 +1067,8 @@
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.shadowMap.enabled = true;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, window.innerWidth <= 600 ? 1.35 : (window.innerWidth <= 900 ? 1.6 : 2)));
+        renderer.shadowMap.enabled = window.innerWidth > 600;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         renderer.toneMappingExposure = 1.22;
@@ -732,7 +1089,7 @@
 
         const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
         keyLight.position.set(6, 12, 8);
-        keyLight.castShadow = true;
+        keyLight.castShadow = window.innerWidth > 600;
         keyLight.shadow.mapSize.width = 2048;
         keyLight.shadow.mapSize.height = 2048;
         keyLight.shadow.bias = -0.0005;
@@ -854,7 +1211,7 @@
         rulerBoard.position.set(-1.18, 2.38, -0.32);
         launchTowerGroup.add(rulerBoard);
 
-        // 3D Glowing Laser Setpoint Marker ($Z_{ref}$) sliding on the graduated ruler
+        // Marqueur lumineux de consigne Z_ref sur la règle graduée
         const setpointMarkerGroup = new THREE.Group();
         launchTowerGroup.add(setpointMarkerGroup);
 
@@ -1473,11 +1830,11 @@
 
             document.getElementById('kpi-thrust-mn').textContent = `${sim.thrustMn.toFixed(1)} mN`;
             document.getElementById('kpi-thrust-gf').textContent = `(${sim.thrustGf.toFixed(2)} gf)`;
-            document.getElementById('kpi-tw-ratio').textContent = `Masse Fusée : 3.20 g (T/W=${twRatio})`;
+            document.getElementById('kpi-tw-ratio').textContent = `Masse Fusée : 3.20 g (T/W = ${twRatio})`;
 
             document.getElementById('kpi-tilt-angle').textContent = `${sim.tiltAngleDeg >= 0 ? '+' : ''}${sim.tiltAngleDeg.toFixed(1)}°`;
             document.getElementById('kpi-sector-state').textContent = Math.abs(sim.vSectorB - sim.vSectorA) > 0.3
-                ? `Correction Active (ΔV=${Math.abs(sim.vSectorB - sim.vSectorA).toFixed(1)}kV)`
+                ? `Correction Active (ΔV=${Math.abs(sim.vSectorB - sim.vSectorA).toFixed(1)} kV)`
                 : `3 Secteurs Équilibrés`;
 
             // 3-Sector voltage bars
@@ -1712,9 +2069,11 @@
             if (view === 'tht') selectSubsystem('tht28');
         }
 
+        let activeSubsystemKey = 'rocket';
         function selectSubsystem(subKey) {
             const info = SUBSYSTEM_DB[subKey];
             if (!info) return;
+            activeSubsystemKey = subKey;
 
             document.getElementById('insp-category').textContent = info.category;
             document.getElementById('insp-title').textContent = info.title;
@@ -1753,8 +2112,23 @@
         labelDefs.forEach(d => {
             const el = document.createElement('div');
             el.className = 'label-3d px-2.5 py-1 rounded-full text-[11px] font-semibold glass-panel text-sky-200 border border-sky-400/40 flex items-center gap-1.5 shadow-lg';
-            el.innerHTML = `<span class="w-2 h-2 rounded-full bg-sky-400"></span><span>${d.text}</span>`;
+            const dot = document.createElement('span');
+            dot.className = 'w-2 h-2 rounded-full bg-sky-400 flex-shrink-0';
+            dot.setAttribute('aria-hidden', 'true');
+            const text = document.createElement('span');
+            text.textContent = d.text;
+            el.append(dot, text);
+            el.setAttribute('role', 'button');
+            el.setAttribute('tabindex', '0');
+            el.setAttribute('aria-label', `Inspecter : ${d.text}`);
+            el.title = d.text;
             el.onclick = () => selectSubsystem(d.key);
+            el.onkeydown = (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    selectSubsystem(d.key);
+                }
+            };
             labelsContainer.appendChild(el);
             labelEls.push({ el, d });
         });
@@ -1764,7 +2138,37 @@
                 labelEls.forEach(({ el }) => el.style.display = 'none');
                 return;
             }
-            labelEls.forEach(({ el, d }) => {
+
+            const compactScreen = window.innerWidth <= 900;
+            const blockedSelectors = [
+                'header', '#controls-panel', '#telemetry-panel',
+                'footer', '#responsive-toolbar', '#perturbation-banner'
+            ];
+            const blockedRects = blockedSelectors
+                .map(selector => document.querySelector(selector))
+                .filter(element => {
+                    if (!element) return false;
+                    const style = window.getComputedStyle(element);
+                    return style.display !== 'none' && style.visibility !== 'hidden';
+                })
+                .map(element => element.getBoundingClientRect())
+                .filter(rect => rect.width > 1 && rect.height > 1);
+
+            const overlaps = (a, b) =>
+                a.left < b.right && a.right > b.left &&
+                a.top < b.bottom && a.bottom > b.top;
+
+            const visibleLabelRects = [];
+            const orderedLabels = [...labelEls].sort((a, b) =>
+                Number(b.d.key === activeSubsystemKey) - Number(a.d.key === activeSubsystemKey)
+            );
+            orderedLabels.forEach(({ el, d }) => {
+                // Sur tablette/téléphone, ne montrer que l'annotation du composant actif.
+                if (compactScreen && d.key !== activeSubsystemKey) {
+                    el.style.display = 'none';
+                    return;
+                }
+
                 const pos = d.offset.clone();
                 if (d.followRocket) {
                     pos.x += rocketRootGroup.position.x;
@@ -1772,15 +2176,105 @@
                     pos.z += rocketRootGroup.position.z;
                 }
                 pos.project(camera);
-                if (pos.z > 1) {
+                if (pos.z > 1 || pos.z < -1 || pos.x < -1 || pos.x > 1 || pos.y < -1 || pos.y > 1) {
                     el.style.display = 'none';
                     return;
                 }
+
+                const px = (pos.x * 0.5 + 0.5) * window.innerWidth;
+                const py = (-(pos.y * 0.5) + 0.5) * window.innerHeight;
                 el.style.display = 'flex';
-                el.style.left = `${(pos.x * 0.5 + 0.5) * window.innerWidth}px`;
-                el.style.top = `${(-(pos.y * 0.5) + 0.5) * window.innerHeight}px`;
+                el.style.left = `${px}px`;
+                el.style.top = `${py}px`;
+
+                // Mesurer le label après affichage pour éviter les débordements et les collisions.
+                const rect = el.getBoundingClientRect();
+                const margin = compactScreen ? 8 : 10;
+                const outsideViewport = rect.left < margin || rect.right > window.innerWidth - margin ||
+                    rect.top < margin || rect.bottom > window.innerHeight - margin;
+                const coveredByUI = blockedRects.some(blocked => overlaps(rect, blocked));
+                const coveredByAnotherLabel = visibleLabelRects.some(other => overlaps(rect, other));
+
+                if (outsideViewport || coveredByUI || coveredByAnotherLabel) {
+                    el.style.display = 'none';
+                } else {
+                    visibleLabelRects.push(rect);
+                }
             });
         }
+
+        // Caler les panneaux PC juste sous l'en-tête, même si celui-ci passe sur plusieurs lignes.
+        function syncDesktopPanelLayout() {
+            if (window.innerWidth <= 900) return;
+            const header = document.querySelector('header');
+            if (!header) return;
+            const headerBottom = header.getBoundingClientRect().bottom;
+            const top = Math.max(88, Math.ceil(headerBottom + 10));
+            const maxHeight = Math.max(170, window.innerHeight - top - 82);
+            document.documentElement.style.setProperty('--desktop-panel-top', `${top}px`);
+            document.documentElement.style.setProperty('--desktop-panel-max-height', `${maxHeight}px`);
+        }
+
+        function toggleDesktopFocus() {
+            const enabled = document.body.classList.toggle('focus-mode');
+            const button = document.getElementById('desktop-focus-toggle');
+            if (button) {
+                button.setAttribute('aria-pressed', String(enabled));
+                button.innerHTML = enabled
+                    ? '<i class="fas fa-compress"></i><span>Afficher panneaux</span>'
+                    : '<i class="fas fa-expand"></i><span>Vue 3D</span>';
+                button.title = enabled
+                    ? 'Réafficher les panneaux de commande et de télémétrie'
+                    : 'Masquer les panneaux pour dégager le modèle 3D';
+            }
+            syncDesktopPanelLayout();
+        }
+
+        window.addEventListener('resize', syncDesktopPanelLayout, { passive: true });
+        if (window.ResizeObserver) {
+            const headerObserver = new ResizeObserver(syncDesktopPanelLayout);
+            headerObserver.observe(document.querySelector('header'));
+        }
+        requestAnimationFrame(syncDesktopPanelLayout);
+
+        // Barre adaptée au tactile : tiroirs, vues caméra et tests rapides.
+        (function setupResponsiveToolbar() {
+            const toolbar = document.getElementById('responsive-toolbar');
+            const panels = [document.getElementById('controls-panel'), document.getElementById('telemetry-panel')];
+            if (!toolbar) return;
+
+            function closeMobilePanels() {
+                panels.forEach(panel => panel.classList.remove('mobile-panel-open'));
+                toolbar.querySelectorAll('[data-panel]').forEach(button => button.classList.remove('active'));
+            }
+
+            toolbar.querySelectorAll('[data-panel]').forEach(button => {
+                button.addEventListener('click', () => {
+                    const panel = document.getElementById(button.dataset.panel);
+                    const wasOpen = panel && panel.classList.contains('mobile-panel-open');
+                    closeMobilePanels();
+                    if (panel && !wasOpen) {
+                        panel.classList.add('mobile-panel-open');
+                        button.classList.add('active');
+                    }
+                });
+            });
+
+            toolbar.querySelectorAll('[data-camera]').forEach(button => {
+                button.addEventListener('click', () => {
+                    setCamView(button.dataset.camera);
+                });
+            });
+
+            toolbar.querySelector('[data-action="push"]').addEventListener('click', triggerPushPerturbation);
+            toolbar.querySelector('[data-action="tilt"]').addEventListener('click', triggerTiltPerturbation);
+            toolbar.querySelector('[data-action="demo"]').addEventListener('click', toggleAutoDemo);
+
+            // En repassant sur un grand écran, les panneaux retrouvent leur place.
+            window.addEventListener('resize', () => {
+                if (window.innerWidth > 900) closeMobilePanels();
+            });
+        })();
 
         // Raycaster for direct 3D clicks
         const raycaster = new THREE.Raycaster();
@@ -1798,11 +2292,19 @@
             }
         });
 
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
+        function resize3DScene() {
+            const width = Math.max(1, container.clientWidth || window.innerWidth);
+            const height = Math.max(1, container.clientHeight || window.innerHeight);
+            camera.aspect = width / height;
             camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, width <= 600 ? 1.35 : (width <= 900 ? 1.6 : 2)));
+            renderer.setSize(width, height, false);
+        }
+        window.addEventListener('resize', resize3DScene, { passive: true });
+        if (window.ResizeObserver) {
+            const sceneResizeObserver = new ResizeObserver(resize3DScene);
+            sceneResizeObserver.observe(container);
+        }
 
         // ============================================================================
         // 12. MAIN 60 FPS RENDER & MULTIPHYSICS ANIMATION LOOP
@@ -1897,6 +2399,9 @@
         }
 
         window.onload = () => {
+            if (window.innerWidth <= 900) {
+                activeSubsystemKey = 'rocket';
+            }
             updateTelemetryAndOscilloscope();
             animate();
         };
