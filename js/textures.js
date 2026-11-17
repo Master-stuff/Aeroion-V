@@ -156,6 +156,35 @@ export function createParticleTexture() {
     return new THREE.CanvasTexture(pCanvas);
 }
 
+export function createCoronaCurtainTexture() {
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 128;
+    const ctx = c.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, 128);
+    grad.addColorStop(0.0, 'rgba(240, 171, 252, 0.95)');
+    grad.addColorStop(0.28, 'rgba(168, 85, 247, 0.52)');
+    grad.addColorStop(0.75, 'rgba(56, 189, 248, 0.16)');
+    grad.addColorStop(1.0, 'rgba(56, 189, 248, 0.0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 64, 128);
+    return new THREE.CanvasTexture(c);
+}
+
+export function createLedGlowTexture() {
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 64;
+    const ctx = c.getContext('2d');
+    const grad = ctx.createRadialGradient(32, 32, 1, 32, 32, 30);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.3, 'rgba(255,255,255,0.65)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+}
+
 export function createMaterials() {
     return {
         aluMirror: new THREE.MeshStandardMaterial({

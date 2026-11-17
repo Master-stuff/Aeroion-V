@@ -7,6 +7,7 @@ import {
     PARTICLE_COUNT,
     ARC_SPAN,
     SECTOR_ANGLES,
+    TETHER_SEGMENTS,
     SUBSYSTEM_DB
 } from './config.js';
 import { sim } from './state.js';
@@ -16,6 +17,8 @@ import {
     createRulerScaleTexture,
     createColorTHTLabelTexture,
     createParticleTexture,
+    createCoronaCurtainTexture,
+    createLedGlowTexture,
     createMaterials
 } from './textures.js';
 
@@ -70,6 +73,8 @@ rocketPlasmaLight.position.set(-1.4, 2.2, 0);
 scene.add(rocketPlasmaLight);
 
 const MAT = createMaterials();
+const coronaCurtainTex = createCoronaCurtainTexture();
+const ledGlowTex = createLedGlowTexture();
 
 const clickableMeshes = [];
 function registerClickable(obj, subKey) {
@@ -223,7 +228,7 @@ const rocketRootGroup = new THREE.Group();
 rocketRootGroup.position.set(TOWER_X, 2.38, 0);
 scene.add(rocketRootGroup);
 
-// Gimbal pivot inside rocketRootGroup for smooth roll/pitch tilt visualization
+// Gimbal pivot inside rocketRootGroup for smooth 2-axis roll/pitch tilt visualization
 const rocketTiltGroup = new THREE.Group();
 rocketRootGroup.add(rocketTiltGroup);
 
@@ -339,7 +344,25 @@ stageConfigs.forEach(st => {
         glowArc.rotation.x = Math.PI / 2;
         glowArc.rotation.z = -sec.startAngle - ARC_SPAN + Math.PI / 2;
         st.grp.add(glowArc);
-        sectorGlowMeshes[sec.id].push(glowArc);
+        sectorGlowMeshes[sec.id].push({ mesh: glowArc, baseOpacity: 0.92, isCurtain: false });
+
+        // 4. Volumetric Corona Ionization Curtain bridging emitter wire to aluminum skirt
+        const curtainMat = new THREE.MeshBasicMaterial({
+            map: coronaCurtainTex,
+            color: 0xc084fc,
+            transparent: true,
+            opacity: 0.5,
+            side: THREE.DoubleSide,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        const curtainMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(st.rTop * 0.96, st.rTop, 0.22, 24, 1, true, sec.startAngle, ARC_SPAN),
+            curtainMat
+        );
+        curtainMesh.position.set(0, st.yBase + 0.32, 0);
+        st.grp.add(curtainMesh);
+        sectorGlowMeshes[sec.id].push({ mesh: curtainMesh, baseOpacity: 0.52, isCurtain: true });
     });
 });
 
@@ -348,13 +371,12 @@ registerClickable(upperStageGroup, 'rocket');
 registerClickable(lowerStageGroup, 'sectors');
 
 // ----------------------------------------------------------------------------
-// 3D VISUAL PERTURBATION ROD ("BAGUETTE DU JURY")
+// 3D VISUAL PERTURBATION ROD ("BAGUETTE DU JURY") & LATERAL WIND STREAMLINES
 // ----------------------------------------------------------------------------
 const juryRodGroup = new THREE.Group();
 juryRodGroup.visible = false;
 scene.add(juryRodGroup);
 
-// Insulating Acrylic Rod pushing down on the rocket nosecone
 const rodShaft = new THREE.Mesh(
     new THREE.CylinderGeometry(0.035, 0.035, 2.2, 16),
     new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.85 })
@@ -371,6 +393,50 @@ pushCone.position.set(0, 0.15, 0);
 pushCone.rotation.x = Math.PI;
 juryRodGroup.add(pushCone);
 
+// 3D Lateral Wind Gust Visual Streamlines ("Rafale Latérale")
+const windGustGroup = new THREE.Group();
+windGustGroup.visible = false;
+scene.add(windGustGroup);
+
+const windRibbons = [];
+for (let wIdx = 0; wIdx < 4; wIdx++) {
+    const yOff = (wIdx - 1.5) * 0.38;
+    const zOff = (wIdx % 2 === 0 ? 0.28 : -0.28);
+    const streamCurve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-1.3, yOff, zOff),
+        new THREE.Vector3(-0.6, yOff + 0.08, zOff * 0.7),
+        new THREE.Vector3(0.05, yOff - 0.05, zOff * 0.3),
+        new THREE.Vector3(0.65, yOff + 0.04, 0)
+    ]);
+    const streamMesh = new THREE.Mesh(
+        new THREE.TubeGeometry(streamCurve, 20, 0.022, 8, false),
+        new THREE.MeshBasicMaterial({
+            color: wIdx % 2 === 0 ? 0xc084fc : 0x38bdf8,
+            transparent: true,
+            opacity: 0.78,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        })
+    );
+    const arrowCone = new THREE.Mesh(
+        new THREE.ConeGeometry(0.065, 0.18, 12),
+        new THREE.MeshBasicMaterial({
+            color: 0xe879f9,
+            transparent: true,
+            opacity: 0.85,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        })
+    );
+    arrowCone.rotation.z = -Math.PI / 2;
+    arrowCone.position.set(0.7, yOff + 0.04, 0);
+
+    const streamSub = new THREE.Group();
+    streamSub.add(streamMesh, arrowCone);
+    windGustGroup.add(streamSub);
+    windRibbons.push({ group: streamSub, phase: wIdx * 0.25 });
+}
+
 // ============================================================================
 // RIGHT SIDE OF BENCH: LARGE COLOR TV THT (28 kV), 10MΩ BALLAST & ESP32 PID
 // ============================================================================
@@ -382,7 +448,6 @@ const tht28Group = new THREE.Group();
 tht28Group.position.set(2.15, 0, -0.45);
 powerBenchGroup.add(tht28Group);
 
-// Molded base & main HV potted black tower
 const thtBaseBlock = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.22, 1.15), MAT.plaBlack);
 thtBaseBlock.position.set(0, 0.11, 0);
 tht28Group.add(thtBaseBlock);
@@ -392,7 +457,6 @@ thtMainTower.position.set(0.1, 0.95, 0);
 thtMainTower.castShadow = true;
 tht28Group.add(thtMainTower);
 
-// Authentic 28 kV Color TV THT Technical Label on cylinder front
 const thtSticker = new THREE.Mesh(
     new THREE.CylinderGeometry(0.585, 0.585, 0.65, 32, 1, true, -0.65, 1.3),
     new THREE.MeshBasicMaterial({ map: createColorTHTLabelTexture(), side: THREE.DoubleSide })
@@ -400,7 +464,6 @@ const thtSticker = new THREE.Mesh(
 thtSticker.position.set(0.1, 1.0, 0);
 tht28Group.add(thtSticker);
 
-// Side Focus / Screen Bleeder Box with the 2 Iconic Rotary Knobs (FOCUS & SCREEN)
 const focusBox = new THREE.Mesh(new THREE.BoxGeometry(0.38, 1.15, 0.52), MAT.plaBlack);
 focusBox.position.set(0.52, 0.85, 0.22);
 tht28Group.add(focusBox);
@@ -415,7 +478,6 @@ for (let kIdx = 0; kIdx < 2; kIdx++) {
     tht28Group.add(knob);
 }
 
-// Exposed Large U-Shaped Ferrite Core + 5 Primary Turns of Insulated Wire
 const largeFerrite = new THREE.Mesh(new THREE.BoxGeometry(0.32, 1.72, 0.78), MAT.ferrite);
 largeFerrite.position.set(-0.46, 0.98, 0);
 tht28Group.add(largeFerrite);
@@ -430,7 +492,6 @@ for (let t = 0; t < 5; t++) {
     tht28Group.add(turn);
 }
 
-// Large Finned Aluminum Heatsink + Power Switching Transistor (BU508 / IRFP250) next to THT
 const hsPlate = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.25, 1.05), MAT.aluBrushed);
 hsPlate.position.set(1.15, 0.65, -0.45);
 hsPlate.castShadow = true;
@@ -442,7 +503,6 @@ for (let f = -3; f <= 3; f++) {
     tht28Group.add(fin);
 }
 
-// Thick Red Silicone 28 kV Anode Cable arching from top of THT to the 10 MOhm Ballast Chain
 const hvAnodeCurve = new THREE.CatmullRomCurve3([
     new THREE.Vector3(0.1, 1.78, 0),
     new THREE.Vector3(0.0, 2.25, 0.2),
@@ -496,28 +556,66 @@ const espCan = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.06, 0.4), MAT.aluBru
 espCan.position.set(0.25, 0.19, -0.2);
 espControlGroup.add(espCan);
 
-// 3 Glowing Sector Indicator LEDs on the 3-Way Distributor (Secteur A, B, C)
+// 3 Glowing Sector Indicator LEDs + Additive Sprite Halos on the 3-Way Distributor (A, B, C)
 const sectorLeds = [];
 const ledColors = [0x38bdf8, 0xa855f7, 0x10b981];
 for (let sIdx = 0; sIdx < 3; sIdx++) {
-    const lMat = new THREE.MeshBasicMaterial({ color: ledColors[sIdx] });
+    const lMat = new THREE.MeshBasicMaterial({ color: ledColors[sIdx], transparent: true, opacity: 0.9 });
     const lMesh = new THREE.Mesh(new THREE.SphereGeometry(0.045, 14, 14), lMat);
     lMesh.position.set(-0.55, 0.16, -0.35 + sIdx * 0.35);
     espControlGroup.add(lMesh);
-    sectorLeds.push(lMesh);
+
+    const haloMat = new THREE.SpriteMaterial({
+        map: ledGlowTex,
+        color: ledColors[sIdx],
+        transparent: true,
+        opacity: 0.7,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+    const haloSprite = new THREE.Sprite(haloMat);
+    haloSprite.position.copy(lMesh.position);
+    haloSprite.scale.setScalar(0.28);
+    espControlGroup.add(haloSprite);
+
+    sectorLeds.push({ mesh: lMesh, halo: haloSprite, baseColor: new THREE.Color(ledColors[sIdx]) });
 }
 
 registerClickable(espControlGroup, 'esp32');
 
-// Dynamic Ultra-Fine Copper Tether Bundle connecting Ballast/Distributor to the Flying Rocket
-const tetherGeo = new THREE.BufferGeometry().setFromPoints([
+// Smooth Pre-Allocated 24-Segment Catenary HV Copper Tether Bundle
+const tetherControlPts = [
     new THREE.Vector3(1.15, 0.85, 0.88),
-    new THREE.Vector3(-0.1, 1.1, 0.4),
+    new THREE.Vector3(0.45, 0.62, 0.62),
+    new THREE.Vector3(-0.45, 0.95, 0.25),
     new THREE.Vector3(TOWER_X, 2.38, 0)
-]);
+];
+const tetherCurve = new THREE.CatmullRomCurve3(tetherControlPts);
+const tetherPointsBuf = new Float32Array((TETHER_SEGMENTS + 1) * 3);
+const tetherGeo = new THREE.BufferGeometry();
+tetherGeo.setAttribute('position', new THREE.BufferAttribute(tetherPointsBuf, 3));
+const _tmpTetherVec = new THREE.Vector3();
+
+function updateTetherCurveGeometry(worldRocketY) {
+    const sagMid = Math.max(0.22, worldRocketY * 0.32);
+    tetherControlPts[1].set(0.45, sagMid + 0.2, 0.58);
+    tetherControlPts[2].set(-0.45, worldRocketY * 0.62 + 0.18, 0.24);
+    tetherControlPts[3].set(TOWER_X, worldRocketY + 0.45, 0);
+
+    const posAttr = tetherGeo.attributes.position;
+    for (let i = 0; i <= TETHER_SEGMENTS; i++) {
+        tetherCurve.getPoint(i / TETHER_SEGMENTS, _tmpTetherVec);
+        tetherPointsBuf[i * 3] = _tmpTetherVec.x;
+        tetherPointsBuf[i * 3 + 1] = _tmpTetherVec.y;
+        tetherPointsBuf[i * 3 + 2] = _tmpTetherVec.z;
+    }
+    posAttr.needsUpdate = true;
+}
+updateTetherCurveGeometry(2.38);
+
 const tetherLine = new THREE.Line(
     tetherGeo,
-    new THREE.LineBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.82 })
+    new THREE.LineBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.85 })
 );
 scene.add(tetherLine);
 
@@ -591,7 +689,6 @@ function resize3DScene() {
 }
 
 export function initScene(onSelectSubsystem) {
-    // Raycaster for direct 3D clicks
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
     let downPt = { x: 0, y: 0 };
@@ -630,60 +727,80 @@ export function updateCameraAndControls(dt) {
 }
 
 export function updateSceneVisuals(dt, elapsed) {
-    // Active Jury Rod visual sync
+    // 1. Active Jury Rod & Lateral Wind Gust visuals
     juryRodGroup.visible = sim.juryRodVisible;
     if (sim.juryRodVisible) {
         juryRodGroup.position.set(TOWER_X, rocketRootGroup.position.y + 2.35, 0);
     }
 
-    // Map Physics to 3D Scene Positions & Glow Intensities
-    // Scale: 0 cm = Y: 0.38 on tower; 40 cm = Y: 4.02 on tower (0.091 world units per cm)
+    windGustGroup.visible = sim.windGustVisible;
+    if (sim.windGustVisible) {
+        windGustGroup.position.set(TOWER_X - 0.65, rocketRootGroup.position.y + 1.05, 0);
+        windRibbons.forEach(wr => {
+            const p = (elapsed * 3.2 + wr.phase) % 1.0;
+            wr.group.position.x = (p - 0.5) * 0.7;
+            wr.group.children.forEach(c => {
+                c.material.opacity = Math.sin(p * Math.PI) * 0.85;
+            });
+        });
+    }
+
+    // 2. Map Physics to 3D Scene Positions & Glow Intensities
     const worldRocketY = 0.38 + sim.zActualCm * 0.091 + (sim.zActualCm > 0.5 ? Math.sin(elapsed * 4.5) * 0.012 : 0);
     rocketRootGroup.position.y = worldRocketY;
     rocketPlasmaLight.position.y = worldRocketY + 1.0;
 
-    // Update laser target marker on the graduated ruler
     setpointMarkerGroup.position.y = 0.38 + sim.zRefCm * 0.091;
 
-    // Apply tilt angle to rocketTiltGroup
+    // 2-axis gimbal attitude tilt
     rocketTiltGroup.rotation.z = THREE.MathUtils.degToRad(-sim.tiltAngleDeg);
+    rocketTiltGroup.rotation.x = THREE.MathUtils.degToRad(sim.pitchAngleDeg);
 
-    // Update dynamic HV copper tether curve
-    tetherGeo.setFromPoints([
-        new THREE.Vector3(1.15, 0.85, 0.88),
-        new THREE.Vector3(-0.1, worldRocketY * 0.55 + 0.25, 0.38),
-        new THREE.Vector3(TOWER_X, worldRocketY + 0.45, 0)
-    ]);
+    // Smooth 24-segment catenary tether update
+    updateTetherCurveGeometry(worldRocketY);
 
-    // Update per-sector Corona Plasma Halo opacity & color brightness
+    // Per-sector Corona Plasma Halo + Ionization Curtain brightness
     const setSectorGlow = (id, kv) => {
-        const ratio = kv > sim.vOnsetKv ? Math.min(1.0, (kv - sim.vOnsetKv) / (28.0 - sim.vOnsetKv)) : 0.0;
-        sectorGlowMeshes[id].forEach(m => {
-            m.material.opacity = ratio * 0.92;
-            m.scale.setScalar(0.95 + ratio * 0.35);
+        const denom = Math.max(1.0, sim.vMaxKv - sim.vOnsetKv);
+        const ratio = kv > sim.vOnsetKv ? Math.min(1.0, (kv - sim.vOnsetKv) / denom) : 0.0;
+        sectorGlowMeshes[id].forEach(({ mesh, baseOpacity, isCurtain }) => {
+            mesh.material.opacity = ratio * baseOpacity;
+            if (!isCurtain) {
+                mesh.scale.setScalar(0.95 + ratio * 0.35);
+            }
         });
     };
     setSectorGlow('A', sim.vSectorA);
     setSectorGlow('B', sim.vSectorB);
     setSectorGlow('C', sim.vSectorC);
 
+    // Animate ESP32 3-Way Distributor LEDs proportional to each sector voltage
+    const sectorKvs = [sim.vSectorA, sim.vSectorB, sim.vSectorC];
+    for (let i = 0; i < sectorLeds.length; i++) {
+        const kv = sectorKvs[i];
+        const denom = Math.max(1.0, sim.vMaxKv - sim.vOnsetKv);
+        const ratio = kv > sim.vOnsetKv ? Math.min(1.0, (kv - sim.vOnsetKv) / denom) : 0.05;
+        const led = sectorLeds[i];
+        led.mesh.material.opacity = 0.25 + ratio * 0.75;
+        led.halo.material.opacity = ratio * 0.85;
+        led.halo.scale.setScalar(0.14 + ratio * 0.28);
+    }
+
     rocketPlasmaLight.intensity = (sim.vCommandKv > sim.vOnsetKv)
         ? ((sim.vCommandKv - sim.vOnsetKv) / 20.0) * 2.4
         : 0.0;
 
-    // Animate HC-SR04 Ultrasonic Acoustic Wave Rings (Upward Ping & Downward Echo)
+    // 3. Animate HC-SR04 Ultrasonic Acoustic Wave Rings
     if (sim.showSonar) {
         const rocketBottomY = Math.max(0.42, rocketRootGroup.position.y);
         sonarRings.forEach(sr => {
             sr.phase = (sr.phase + dt * 1.15) % 1.0;
             const p = sr.phase;
             if (!sr.isEcho) {
-                // Rising ultrasonic ping from HC-SR04 (Y=0.28) to Rocket bottom
                 sr.mesh.position.y = THREE.MathUtils.lerp(0.28, rocketBottomY, p);
                 sr.mesh.scale.setScalar(0.6 + p * 1.6);
                 sr.mesh.material.opacity = (1.0 - p) * 0.65;
             } else {
-                // Reflected echo travelling back down from Rocket bottom to HC-SR04
                 sr.mesh.position.y = THREE.MathUtils.lerp(rocketBottomY, 0.28, p);
                 sr.mesh.scale.setScalar(1.8 - p * 1.1);
                 sr.mesh.material.opacity = (1.0 - p) * 0.55;
@@ -691,21 +808,24 @@ export function updateSceneVisuals(dt, elapsed) {
         });
     }
 
-    // Animate 3-Sector Ionic Wind Particles (Velocity & Density proportional to each Sector's kV)
+    // 4. Animate 3-Sector Bi-Stage "Turbo Ionique" Ionic Wind Particles
     const posAttr = pGeo.attributes.position;
     const activeThrust = sim.thrustMn > 1.0;
     particleSystem.visible = activeThrust;
 
     if (activeThrust) {
         const tiltRad = THREE.MathUtils.degToRad(sim.tiltAngleDeg);
+        const pitchRad = THREE.MathUtils.degToRad(sim.pitchAngleDeg);
         const sectorKvList = [sim.vSectorA, sim.vSectorB, sim.vSectorC];
 
         for (let i = 0; i < PARTICLE_COUNT; i++) {
-            const secIdx = i % 3; // 0 = Sector A, 1 = Sector B, 2 = Sector C
+            const secIdx = i % 3;
+            const isLowerStage = (i % 2 === 1);
             const secKv = sectorKvList[secIdx];
-            const speedMult = Math.max(0.2, (secKv - sim.vOnsetKv) / 14.0);
+            const baseSpeedMult = Math.max(0.2, (secKv - sim.vOnsetKv) / 14.0);
+            const stageSpeedMult = isLowerStage ? baseSpeedMult * 1.4 : baseSpeedMult;
 
-            pPhases[i] += dt * speedMult * (1.2 + (i % 5) * 0.15);
+            pPhases[i] += dt * stageSpeedMult * (1.2 + (i % 5) * 0.15);
             if (pPhases[i] > 1.0) pPhases[i] -= 1.0;
 
             const prog = pPhases[i];
@@ -713,12 +833,12 @@ export function updateSceneVisuals(dt, elapsed) {
             const localAngle = secConf.startAngle + ((i * 0.618034) % 1.0) * ARC_SPAN;
             const r = 0.65 + (i % 4) * 0.03;
 
-            const yStart = rocketRootGroup.position.y + (i % 2 === 0 ? 1.55 : 0.78);
-            const dropDist = prog * (1.1 + speedMult * 0.9);
+            const yStart = rocketRootGroup.position.y + (isLowerStage ? 0.78 : 1.55);
+            const dropDist = prog * (1.1 + stageSpeedMult * 0.9);
             const y = Math.max(0.14, yStart - dropDist);
 
             const xLocal = Math.cos(localAngle) * r + Math.sin(tiltRad) * dropDist;
-            const zLocal = Math.sin(localAngle) * r;
+            const zLocal = Math.sin(localAngle) * r - Math.sin(pitchRad) * dropDist;
 
             posAttr.array[i * 3] = TOWER_X + xLocal;
             posAttr.array[i * 3 + 1] = y;
@@ -734,13 +854,10 @@ export function renderScene() {
 
 export function applyExplodedView(explodedFactor) {
     const e = explodedFactor;
-
-    // Vertically separate Nosecone, Upper Stage 1 and Lower Stage 2
     noseConeGroup.position.y = e * 0.75;
     upperStageGroup.position.y = e * 0.25;
     lowerStageGroup.position.y = -e * 0.35;
 
-    // Radially expand the 3 Aluminum Collector Sectors (A, B, C) to showcase the 3-sector architecture
     sectorSkirtMeshes.forEach(({ mesh, centerAngle }) => {
         const radOut = e * 0.28;
         mesh.position.x = Math.cos(centerAngle) * radOut;
@@ -750,10 +867,6 @@ export function applyExplodedView(explodedFactor) {
 
 export function setSonarVisibility(visible) {
     sonarWavesGroup.visible = visible;
-}
-
-export function getRocketPosition() {
-    return rocketRootGroup.position;
 }
 
 export function projectWorldToScreen(offset, followRocket) {

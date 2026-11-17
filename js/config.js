@@ -5,12 +5,27 @@
 export const TOWER_X = -1.4;
 export const PARTICLE_COUNT = 1350; // 450 particles per sector (A, B, C)
 export const ARC_SPAN = (Math.PI * 2) / 3 - 0.18; // 120° minus 5mm insulating gap between sectors
+export const TETHER_SEGMENTS = 24;
 
-// Sector A: Front-Left (center angle 150°), Sector B: Front-Right (30°), Sector C: Rear (270° / -90°)
+export const DEFAULT_PID = {
+    kp: 0.65,
+    ki: 0.35,
+    kd: 0.32
+};
+
+export const DEFAULT_PHYSICS = {
+    rocketMassG: 3.20,
+    gapMm: 22.0
+};
+
+const SQRT3_2 = Math.sqrt(3) / 2;
+
+// Sector A: Front-Left (150°), Sector B: Front-Right (30°), Sector C: Rear (270°)
+// (ux, uz) are unit radial direction vectors in the horizontal XZ plane.
 export const SECTOR_ANGLES = [
-    { id: 'A', startAngle: Math.PI / 2 + 0.09, centerAngle: (5 * Math.PI) / 6 },
-    { id: 'B', startAngle: -Math.PI / 6 + 0.09, centerAngle: Math.PI / 6 },
-    { id: 'C', startAngle: (7 * Math.PI) / 6 + 0.09, centerAngle: (3 * Math.PI) / 2 }
+    { id: 'A', startAngle: Math.PI / 2 + 0.09, centerAngle: (5 * Math.PI) / 6, ux: -SQRT3_2, uz: 0.5 },
+    { id: 'B', startAngle: -Math.PI / 6 + 0.09, centerAngle: Math.PI / 6, ux: SQRT3_2, uz: 0.5 },
+    { id: 'C', startAngle: (7 * Math.PI) / 6 + 0.09, centerAngle: (3 * Math.PI) / 2, ux: 0.0, uz: -1.0 }
 ];
 
 export const CAMERA_VIEWS = {

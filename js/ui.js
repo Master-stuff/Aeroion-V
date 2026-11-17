@@ -8,10 +8,12 @@ import {
     applyTargetAltitudeState,
     applyPushPerturbationState,
     applyTiltPerturbationState,
+    resetPIDGainsState,
     pushOscilloscopeSample
 } from './state.js';
 import { computeTelemetryMetrics } from './physics.js';
-import { drawOscilloscope } from './oscilloscope.js';
+import { drawOscilloscope, bindOscilloscopeInteractions } from './oscilloscope.js';
+import { toggleAudio } from './audio.js';
 import {
     animateCam,
     focusSubsystemCamera,
@@ -21,29 +23,39 @@ import {
 } from './scene3d.js';
 
 const labelEls = [];
+let cachedBlockedRects = [];
+let layoutDirty = true;
+let rectCacheFrame = 0;
+
+export function markLayoutDirty() {
+    layoutDirty = true;
+}
 
 function showPushBanner() {
     const banner = document.getElementById('perturbation-banner');
     document.getElementById('perturbation-title').textContent = 'TEST DU JURY : POUSSÉE VERS LE BAS AVEC BAGUETTE (-10 CM)';
     document.getElementById('perturbation-sub').textContent = "Le capteur HC-SR04 détecte la baisse d'altitude → L'ESP32 pousse le gros THT à 27,8 kV pour remonter !";
     banner.classList.remove('hidden');
+    markLayoutDirty();
 }
 
 function showTiltBanner() {
     const banner = document.getElementById('perturbation-banner');
     document.getElementById('perturbation-title').textContent = 'RAFALE LATÉRALE (+12° TILT) — STABILISATION 3 SECTEURS ACTIVE';
-    document.getElementById('perturbation-sub').textContent = 'Survoltage automatique du Secteur B (jusqu\'à 27,5 kV) pour redresser la fusée sans ailerons.';
+    document.getElementById('perturbation-sub').textContent = 'Survoltage automatique des secteurs bas (jusqu\'à 28,0 kV) pour redresser la fusée sans ailerons.';
     banner.classList.remove('hidden');
+    markLayoutDirty();
 }
 
 export function hidePerturbationBanner() {
     if (sim.pushTimer <= 0 && sim.windTimer <= 0) {
         document.getElementById('perturbation-banner').classList.add('hidden');
+        markLayoutDirty();
     }
 }
 
 export function updateTelemetryAndOscilloscope() {
-    const { errCm, echoUs, pwmPct, twRatio, sectorDeltaKv, isLocked } = computeTelemetryMetrics();
+    const { errCm, echoUs, pwmPct, twRatio, sectorDeltaKv, totalTiltDeg, isLocked } = computeTelemetryMetrics();
 
     document.getElementById('kpi-altitude').textContent = `${sim.zActualCm.toFixed(1)} cm`;
     document.getElementById('kpi-alt-error').textContent = `(Err: ${errCm >= 0 ? '+' : ''}${errCm.toFixed(1)}cm)`;
@@ -55,12 +67,14 @@ export function updateTelemetryAndOscilloscope() {
 
     document.getElementById('kpi-thrust-mn').textContent = `${sim.thrustMn.toFixed(1)} mN`;
     document.getElementById('kpi-thrust-gf').textContent = `(${sim.thrustGf.toFixed(2)} gf)`;
-    document.getElementById('kpi-tw-ratio').textContent = `Masse Fusée : 3.20 g (T/W = ${twRatio})`;
+    document.getElementById('kpi-tw-ratio').textContent = `Masse Fusée : ${sim.rocketMassG.toFixed(2)} g (T/W = ${twRatio})`;
 
-    document.getElementById('kpi-tilt-angle').textContent = `${sim.tiltAngleDeg >= 0 ? '+' : ''}${sim.tiltAngleDeg.toFixed(1)}°`;
-    document.getElementById('kpi-sector-state').textContent = sectorDeltaKv > 0.3
-        ? `Correction Active (ΔV=${sectorDeltaKv.toFixed(1)} kV)`
-        : '3 Secteurs Équilibrés';
+    document.getElementById('kpi-tilt-angle').textContent = `${totalTiltDeg.toFixed(1)}°`;
+    document.getElementById('kpi-sector-state').textContent = !sim.sectorStabEnabled
+        ? 'Stab. 3 Secteurs COUPÉE'
+        : sectorDeltaKv > 0.3
+            ? `Correction Active (ΔV=${sectorDeltaKv.toFixed(1)} kV)`
+            : '3 Secteurs Équilibrés';
 
     // 3-Sector voltage bars
     document.getElementById('val-kv-a').textContent = `${sim.vSectorA.toFixed(1)} kV`;
@@ -143,6 +157,19 @@ function onManualKvChange() {
     }
 }
 
+function syncPIDAndPhysicsSlidersUI() {
+    document.getElementById('slider-kp').value = sim.kp;
+    document.getElementById('val-kp').textContent = sim.kp.toFixed(2);
+    document.getElementById('slider-ki').value = sim.ki;
+    document.getElementById('val-ki').textContent = sim.ki.toFixed(2);
+    document.getElementById('slider-kd').value = sim.kd;
+    document.getElementById('val-kd').textContent = sim.kd.toFixed(2);
+    document.getElementById('slider-mass').value = sim.rocketMassG;
+    document.getElementById('val-mass').textContent = `${sim.rocketMassG.toFixed(2)} g`;
+    document.getElementById('slider-gap').value = sim.gapMm;
+    document.getElementById('val-gap').textContent = `${sim.gapMm.toFixed(0)} mm`;
+}
+
 function toggleSectorStabilization() {
     sim.sectorStabEnabled = !sim.sectorStabEnabled;
     const btn = document.getElementById('btn-sector-toggle');
@@ -179,14 +206,43 @@ export function toggleAutoDemo() {
     sim.autoDemo = !sim.autoDemo;
     sim.autoDemoTimer = 0.0;
     const btn = document.getElementById('btn-auto-demo');
+    const mobileBtn = document.querySelector('#responsive-toolbar [data-action="demo"]');
+
     if (sim.autoDemo) {
         if (!sim.pidEnabled) togglePIDLoop();
         if (!sim.sectorStabEnabled) toggleSectorStabilization();
         btn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-emerald-500 text-slate-950 border border-emerald-300 transition shadow-lg shadow-emerald-500/30';
         btn.innerHTML = '<i class="fas fa-stop"></i><span>Arrêter Démo</span>';
+        if (mobileBtn) {
+            mobileBtn.classList.add('active');
+            mobileBtn.textContent = '■ Stop';
+        }
     } else {
         btn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-200 border border-emerald-400/50 transition';
         btn.innerHTML = '<i class="fas fa-play"></i><span>Démo Automatique</span>';
+        if (mobileBtn) {
+            mobileBtn.classList.remove('active');
+            mobileBtn.textContent = '▶ Démo';
+        }
+    }
+}
+
+function handleAudioToggle() {
+    const active = toggleAudio();
+    const btn = document.getElementById('btn-audio-toggle');
+    const mobileBtn = document.querySelector('#responsive-toolbar [data-action="audio"]');
+
+    if (btn) {
+        btn.className = active
+            ? 'px-2.5 py-1 rounded-lg bg-cyan-500/25 border border-cyan-400/60 text-cyan-200 text-xs font-semibold transition flex items-center gap-1'
+            : 'px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-600/50 text-xs font-semibold transition flex items-center gap-1';
+        btn.innerHTML = active
+            ? '<i class="fas fa-volume-high text-cyan-300"></i><span>Son</span>'
+            : '<i class="fas fa-volume-xmark text-slate-400"></i><span>Son</span>';
+    }
+    if (mobileBtn) {
+        mobileBtn.classList.toggle('active', active);
+        mobileBtn.textContent = active ? '🔊 Son' : '🔇 Son';
     }
 }
 
@@ -244,18 +300,12 @@ export function selectSubsystem(subKey) {
     focusSubsystemCamera(subKey);
 }
 
-export function update3DLabels() {
-    if (!sim.showLabels) {
-        labelEls.forEach(({ el }) => { el.style.display = 'none'; });
-        return;
-    }
-
-    const compactScreen = window.innerWidth <= 900;
+function refreshBlockedRectsCache() {
     const blockedSelectors = [
         'header', '#controls-panel', '#telemetry-panel',
         'footer', '#responsive-toolbar', '#perturbation-banner'
     ];
-    const blockedRects = blockedSelectors
+    cachedBlockedRects = blockedSelectors
         .map(selector => document.querySelector(selector))
         .filter(element => {
             if (!element) return false;
@@ -265,6 +315,25 @@ export function update3DLabels() {
         .map(element => element.getBoundingClientRect())
         .filter(rect => rect.width > 1 && rect.height > 1);
 
+    labelEls.forEach(entry => {
+        entry.w = 0;
+        entry.h = 0;
+    });
+    layoutDirty = false;
+}
+
+export function update3DLabels() {
+    if (!sim.showLabels) {
+        labelEls.forEach(({ el }) => { el.style.display = 'none'; });
+        return;
+    }
+
+    rectCacheFrame++;
+    if (layoutDirty || rectCacheFrame % 15 === 0) {
+        refreshBlockedRectsCache();
+    }
+
+    const compactScreen = window.innerWidth <= 900;
     const overlaps = (a, b) =>
         a.left < b.right && a.right > b.left &&
         a.top < b.bottom && a.bottom > b.top;
@@ -274,8 +343,8 @@ export function update3DLabels() {
         Number(b.d.key === sim.activeSubsystemKey) - Number(a.d.key === sim.activeSubsystemKey)
     );
 
-    orderedLabels.forEach(({ el, d }) => {
-        // Sur tablette/téléphone, ne montrer que l'annotation du composant actif.
+    orderedLabels.forEach((entry) => {
+        const { el, d } = entry;
         if (compactScreen && d.key !== sim.activeSubsystemKey) {
             el.style.display = 'none';
             return;
@@ -291,12 +360,23 @@ export function update3DLabels() {
         el.style.left = `${projected.x}px`;
         el.style.top = `${projected.y}px`;
 
-        // Mesurer le label après affichage pour éviter les débordements et les collisions.
-        const rect = el.getBoundingClientRect();
+        if (!entry.w || !entry.h) {
+            entry.w = el.offsetWidth;
+            entry.h = el.offsetHeight;
+        }
+        const halfW = entry.w * 0.5;
+        const halfH = entry.h * 0.5;
+        const rect = {
+            left: projected.x - halfW,
+            right: projected.x + halfW,
+            top: projected.y - halfH,
+            bottom: projected.y + halfH
+        };
+
         const margin = compactScreen ? 8 : 10;
         const outsideViewport = rect.left < margin || rect.right > window.innerWidth - margin ||
             rect.top < margin || rect.bottom > window.innerHeight - margin;
-        const coveredByUI = blockedRects.some(blocked => overlaps(rect, blocked));
+        const coveredByUI = cachedBlockedRects.some(blocked => overlaps(rect, blocked));
         const coveredByAnotherLabel = visibleLabelRects.some(other => overlaps(rect, other));
 
         if (outsideViewport || coveredByUI || coveredByAnotherLabel) {
@@ -307,7 +387,6 @@ export function update3DLabels() {
     });
 }
 
-// Caler les panneaux PC juste sous l'en-tête, même si celui-ci passe sur plusieurs lignes.
 function syncDesktopPanelLayout() {
     if (window.innerWidth <= 900) return;
     const header = document.querySelector('header');
@@ -317,6 +396,7 @@ function syncDesktopPanelLayout() {
     const maxHeight = Math.max(170, window.innerHeight - top - 82);
     document.documentElement.style.setProperty('--desktop-panel-top', `${top}px`);
     document.documentElement.style.setProperty('--desktop-panel-max-height', `${maxHeight}px`);
+    markLayoutDirty();
 }
 
 function toggleDesktopFocus() {
@@ -332,9 +412,9 @@ function toggleDesktopFocus() {
             : 'Masquer les panneaux pour dégager le modèle 3D';
     }
     syncDesktopPanelLayout();
+    markLayoutDirty();
 }
 
-// Barre adaptée au tactile : tiroirs, vues caméra et tests rapides.
 function setupResponsiveToolbar() {
     const toolbar = document.getElementById('responsive-toolbar');
     const panels = [document.getElementById('controls-panel'), document.getElementById('telemetry-panel')];
@@ -343,6 +423,7 @@ function setupResponsiveToolbar() {
     function closeMobilePanels() {
         panels.forEach(panel => panel.classList.remove('mobile-panel-open'));
         toolbar.querySelectorAll('[data-panel]').forEach(button => button.classList.remove('active'));
+        markLayoutDirty();
     }
 
     toolbar.querySelectorAll('[data-panel]').forEach(button => {
@@ -354,6 +435,7 @@ function setupResponsiveToolbar() {
                 panel.classList.add('mobile-panel-open');
                 button.classList.add('active');
             }
+            markLayoutDirty();
         });
     });
 
@@ -363,13 +445,14 @@ function setupResponsiveToolbar() {
         });
     });
 
-    toolbar.querySelector('[data-action="push"]').addEventListener('click', triggerPushPerturbation);
-    toolbar.querySelector('[data-action="tilt"]').addEventListener('click', triggerTiltPerturbation);
-    toolbar.querySelector('[data-action="demo"]').addEventListener('click', toggleAutoDemo);
+    toolbar.querySelector('[data-action="push"]')?.addEventListener('click', triggerPushPerturbation);
+    toolbar.querySelector('[data-action="tilt"]')?.addEventListener('click', triggerTiltPerturbation);
+    toolbar.querySelector('[data-action="demo"]')?.addEventListener('click', toggleAutoDemo);
+    toolbar.querySelector('[data-action="audio"]')?.addEventListener('click', handleAudioToggle);
 
-    // En repassant sur un grand écran, les panneaux retrouvent leur place.
     window.addEventListener('resize', () => {
         if (window.innerWidth > 900) closeMobilePanels();
+        markLayoutDirty();
     });
 }
 
@@ -396,7 +479,7 @@ function build3DLabels() {
             }
         });
         labelsContainer.appendChild(el);
-        labelEls.push({ el, d });
+        labelEls.push({ el, d, w: 0, h: 0 });
     });
 }
 
@@ -405,6 +488,7 @@ function bindUIControls() {
     document.getElementById('btn-test-push')?.addEventListener('click', triggerPushPerturbation);
     document.getElementById('btn-test-tilt')?.addEventListener('click', triggerTiltPerturbation);
     document.getElementById('btn-auto-demo')?.addEventListener('click', toggleAutoDemo);
+    document.getElementById('btn-audio-toggle')?.addEventListener('click', handleAudioToggle);
 
     document.querySelectorAll('[data-cam-preset]').forEach(btn => {
         btn.addEventListener('click', () => setCamView(btn.dataset.camPreset));
@@ -417,6 +501,33 @@ function bindUIControls() {
 
     document.getElementById('btn-pid-toggle')?.addEventListener('click', togglePIDLoop);
     document.getElementById('slider-manual-kv')?.addEventListener('input', onManualKvChange);
+
+    // Interactive PID Gain & Physical Parameter Sliders
+    document.getElementById('slider-kp')?.addEventListener('input', (e) => {
+        sim.kp = parseFloat(e.target.value);
+        document.getElementById('val-kp').textContent = sim.kp.toFixed(2);
+    });
+    document.getElementById('slider-ki')?.addEventListener('input', (e) => {
+        sim.ki = parseFloat(e.target.value);
+        document.getElementById('val-ki').textContent = sim.ki.toFixed(2);
+    });
+    document.getElementById('slider-kd')?.addEventListener('input', (e) => {
+        sim.kd = parseFloat(e.target.value);
+        document.getElementById('val-kd').textContent = sim.kd.toFixed(2);
+    });
+    document.getElementById('slider-mass')?.addEventListener('input', (e) => {
+        sim.rocketMassG = parseFloat(e.target.value);
+        document.getElementById('val-mass').textContent = `${sim.rocketMassG.toFixed(2)} g`;
+    });
+    document.getElementById('slider-gap')?.addEventListener('input', (e) => {
+        sim.gapMm = parseFloat(e.target.value);
+        document.getElementById('val-gap').textContent = `${sim.gapMm.toFixed(0)} mm`;
+    });
+    document.getElementById('btn-pid-reset')?.addEventListener('click', () => {
+        resetPIDGainsState();
+        syncPIDAndPhysicsSlidersUI();
+    });
+
     document.getElementById('btn-sector-toggle')?.addEventListener('click', toggleSectorStabilization);
     document.getElementById('slider-manual-tilt')?.addEventListener('input', onManualTiltChange);
 
@@ -432,6 +543,8 @@ function bindUIControls() {
 export function initUI() {
     build3DLabels();
     bindUIControls();
+    bindOscilloscopeInteractions();
+    syncPIDAndPhysicsSlidersUI();
     setupResponsiveToolbar();
 
     window.addEventListener('resize', syncDesktopPanelLayout, { passive: true });
